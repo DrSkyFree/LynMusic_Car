@@ -164,4 +164,9 @@
     <string name="car_display_margin">四周邊距</string>
     <string name="car_display_fullscreen_title">全屏模式</string>
     <string name="car_display_fullscreen_hint">隱藏系統狀態欄與導航欄;部分車機的覆蓋層狀態欄無法由應用移除。</string>
+    <string name="library_scan_title">曲庫掃描</string>
+    <string name="library_scan_incremental_title">增量掃描(推薦)</string>
+    <string name="library_scan_incremental_hint">僅更新新增與變化曲目,保留收藏與歌單引用</string>
+    <string name="library_scan_auto_title">啓動後自動掃描</string>
+    <string name="library_scan_auto_hint">應用啓動 1 分鐘後自動重掃 U 盤來源</string>
 </resources>

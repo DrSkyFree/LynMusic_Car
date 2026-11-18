@@ -164,4 +164,9 @@
     <string name="car_display_margin">Margins</string>
     <string name="car_display_fullscreen_title">Fullscreen mode</string>
     <string name="car_display_fullscreen_hint">Hide system status and navigation bars. Some head units draw their own overlay status bar, which apps cannot remove.</string>
+    <string name="library_scan_title">Library scanning</string>
+    <string name="library_scan_incremental_title">Incremental scan (recommended)</string>
+    <string name="library_scan_incremental_hint">Only updates new and changed tracks, keeping favorites and playlist references</string>
+    <string name="library_scan_auto_title">Auto scan after launch</string>
+    <string name="library_scan_auto_hint">Rescans USB sources one minute after app launch</string>
 </resources>

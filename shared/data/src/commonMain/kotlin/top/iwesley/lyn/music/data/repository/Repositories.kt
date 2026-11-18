@@ -2425,6 +2425,7 @@ class RoomImportSourceRepository(
             if (libraryScanPreferencesStore.scanIncremental.value) {
                 applyIncrementalScanDiff(
                     sourceId = source.id,
+                    report = report,
                     scannedTrackEntities = scannedTrackEntities,
                     keptTracks = keptTracks,
                     scannedAt = scannedAt,
@@ -2514,10 +2515,14 @@ class RoomImportSourceRepository(
      * whose file disappeared are deleted together with their embedded lyrics. Track identity is the
      * stable scan key — for local folders [trackIdFor] derives it from the source id and the
      * lower-cased relative path — so comparing id plus content (sizeBytes and modifiedAt included)
-     * detects exactly the new, changed, and vanished files. Runs inside the caller's write transaction.
+     * detects exactly the new, changed, and vanished files. Embedded lyrics are additionally compared
+     * by payload, so a tags-only change still invalidates the cached lyrics while identical payloads
+     * leave the cached rows — and their version and offsets — untouched. Runs inside the caller's
+     * write transaction.
      */
     private suspend fun applyIncrementalScanDiff(
         sourceId: String,
+        report: ImportScanReport,
         scannedTrackEntities: List<TrackEntity>,
         keptTracks: List<TrackEntity>,
         scannedAt: Long,
@@ -2531,7 +2536,6 @@ class RoomImportSourceRepository(
         val changedEntities = scannedTrackEntities.filter { entity ->
             existingById[entity.id]?.copy(addedAt = entity.addedAt) != entity
         }
-        val changedIds = changedEntities.mapTo(mutableSetOf()) { it.id }
 
         if (removedTracks.isNotEmpty()) {
             removedTracks.map { it.id }.chunked(SQLITE_IN_CLAUSE_CHUNK_SIZE).forEach { chunk ->
@@ -2544,12 +2548,20 @@ class RoomImportSourceRepository(
         if (changedEntities.isNotEmpty()) {
             database.trackDao().upsertAll(changedEntities)
         }
-        // Only touch embedded lyrics of new or changed rows; unchanged rows keep their cached lyrics.
+        // Embedded lyrics are compared by payload, not by row identity: a file whose tags changed
+        // without touching sizeBytes/modifiedAt still gets invalidated, while identical payloads
+        // keep their cached rows (and so their selected version and saved offsets).
+        val existingEmbeddedLyrics = scannedTrackEntities.map { it.id }
+            .chunked(SQLITE_IN_CLAUSE_CHUNK_SIZE)
+            .flatMap { trackIds ->
+                database.lyricsCacheDao().getByTrackIdsAndSourceId(trackIds, EMBEDDED_LYRICS_SOURCE_ID)
+            }
+            .associateBy { it.trackId }
         report.tracks.zip(scannedTrackEntities).forEach { (candidate, entity) ->
-            if (entity.id !in changedIds) return@forEach
             val lyrics = candidate.embeddedLyrics?.trim()?.takeIf { it.isNotBlank() }
-            if (lyrics != null) {
-                database.lyricsCacheDao().upsert(
+            val existing = existingEmbeddedLyrics[entity.id]
+            when {
+                lyrics != null && existing?.rawPayload != lyrics -> database.lyricsCacheDao().upsert(
                     LyricsCacheEntity(
                         trackId = entity.id,
                         sourceId = EMBEDDED_LYRICS_SOURCE_ID,
@@ -2558,8 +2570,8 @@ class RoomImportSourceRepository(
                         selectedForPlayback = entity.id in selectedEmbeddedTrackIds,
                     ),
                 )
-            } else {
-                database.lyricsCacheDao().deleteByTrackIdAndSourceId(entity.id, EMBEDDED_LYRICS_SOURCE_ID)
+                lyrics == null && existing != null ->
+                    database.lyricsCacheDao().deleteByTrackIdAndSourceId(entity.id, EMBEDDED_LYRICS_SOURCE_ID)
             }
         }
     }

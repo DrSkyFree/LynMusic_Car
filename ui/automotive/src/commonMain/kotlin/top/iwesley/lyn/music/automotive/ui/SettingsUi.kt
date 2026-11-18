@@ -1005,6 +1005,10 @@ private fun GeneralSettingsPane(
             state = state,
             onSettingsIntent = onSettingsIntent,
         )
+        LibraryScanSettingsCard(
+            state = state,
+            onSettingsIntent = onSettingsIntent,
+        )
     }
 }
 
@@ -1127,6 +1131,81 @@ private fun CarDisplayScalingSettingsCard(
                 enabled = !state.carImmersiveMode,
                 onFinished = { onSettingsIntent(SettingsIntent.CarContentMarginChanged(it)) },
             )
+        }
+    }
+}
+
+@Composable
+private fun LibraryScanSettingsCard(
+    state: SettingsState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
+    MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = uiString(Res.string.library_scan_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = uiString(Res.string.library_scan_incremental_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = uiString(Res.string.library_scan_incremental_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = mainShellColors.secondaryText,
+                    )
+                }
+                Switch(
+                    checked = state.scanIncremental,
+                    onCheckedChange = { enabled ->
+                        onSettingsIntent(SettingsIntent.ScanIncrementalChanged(enabled))
+                    },
+                    colors = SwitchDefaults.colors(),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = uiString(Res.string.library_scan_auto_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = uiString(Res.string.library_scan_auto_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = mainShellColors.secondaryText,
+                    )
+                }
+                Switch(
+                    checked = state.autoScanOnStartup,
+                    onCheckedChange = { enabled ->
+                        onSettingsIntent(SettingsIntent.AutoScanOnStartupChanged(enabled))
+                    },
+                    colors = SwitchDefaults.colors(),
+                )
+            }
         }
     }
 }
