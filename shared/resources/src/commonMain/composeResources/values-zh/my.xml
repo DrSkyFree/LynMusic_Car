@@ -19,4 +19,5 @@
     <string name="recommendations_today_playlist">今日歌单</string>
     <string name="recommendations_empty_hint">曲库有歌曲后会生成今日推荐。</string>
     <string name="recent_view_all_action">查看全部 &gt;</string>
+    <string name="my_exit_app_action">退出应用</string>
 </resources>

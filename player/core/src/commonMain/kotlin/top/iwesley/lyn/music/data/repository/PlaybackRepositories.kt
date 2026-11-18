@@ -94,6 +94,19 @@ interface PlaybackRepository {
     suspend fun cycleMode()
     suspend fun overrideCurrentTrackArtwork(artworkLocator: String?, expectedTrackId: String? = null)
     suspend fun close()
+
+    /**
+     * 完全退出前的收尾:暂停播放并把当前播放光标显式落盘,保证下次启动从当前位置续播。
+     * 与「停止播放」共用 [persistSnapshotCursor] 单一保存写者;已停止态下不重复落盘,
+     * 避免用归零后的实时位置覆盖已保存的进度。
+     */
+    suspend fun prepareCompleteExit()
+
+    /** 「停止播放」语义:先落盘光标,再暂停并把实时位置归零(不覆盖已落盘的光标)。 */
+    suspend fun stopPlaybackForSession()
+
+    /** 「开始播放」(无音源或停止后再播):从持久化队列与光标恢复并续播,幂等。 */
+    suspend fun resumeFromPersistedState()
 }
 
 sealed interface PlaybackHydrationResult {
@@ -150,6 +163,9 @@ class DefaultPlaybackRepository(
     private var currentQueueIsTransient = false
     @Volatile
     private var hasClosed = false
+    /** 「停止播放」后的驻留态:实时位置已归零,禁止再把 0 覆盖回已落盘的光标。 */
+    @Volatile
+    private var parkedAfterSessionStop = false
     private var observedCompletionCount = 0L
     private var playbackStatsSession: PlaybackStatsSession? = null
     private var loggedArtworkTrackId: String? = null
@@ -459,6 +475,84 @@ class DefaultPlaybackRepository(
         pauseCurrentTrack()
     }
 
+    override suspend fun prepareCompleteExit() {
+        playbackCommandMutex.withLock {
+            val snapshot = mutableSnapshot.value
+            if (snapshot.currentTrack == null) return@withLock
+            logger.warn(PLAYBACK_LOG_TAG) {
+                "repository-prepare-complete-exit track=${snapshot.currentTrack?.id.orEmpty()} " +
+                    "position=${snapshot.positionMs} parked=$parkedAfterSessionStop " +
+                    "transient=$currentQueueIsTransient"
+            }
+            gateway.pause()
+            // 停止驻留态下实时位置已归零且光标已在 stopPlaybackForSession 落盘,不能用 0 覆盖。
+            if (!parkedAfterSessionStop) {
+                persistSnapshotCursorIfPersistent()
+            }
+        }
+    }
+
+    override suspend fun stopPlaybackForSession() {
+        playbackCommandMutex.withLock {
+            val snapshot = mutableSnapshot.value
+            if (snapshot.currentTrack == null) return@withLock
+            val savedPositionMs = snapshot.positionMs
+            // 1. 先落盘当前进度(与完全退出共用同一保存入口,唯一写者)。
+            persistSnapshotCursorIfPersistent()
+            // 2. 暂停。
+            gateway.pause()
+            // 3. 实时位置归零:只动实时位置;置驻留标志阻止后续把 0 覆盖回已保存光标。
+            gateway.seekTo(0L)
+            mutableSnapshot.update { it.copy(positionMs = 0L) }
+            parkedAfterSessionStop = true
+            logger.warn(PLAYBACK_LOG_TAG) {
+                "repository-stop-for-session track=${snapshot.currentTrack?.id.orEmpty()} " +
+                    "savedPositionMs=$savedPositionMs"
+            }
+        }
+    }
+
+    override suspend fun resumeFromPersistedState() {
+        if (parkedAfterSessionStop) {
+            playbackCommandMutex.withLock {
+                if (mutableSnapshot.value.currentTrack != null) {
+                    resumeAfterSessionStopLocked()
+                    return
+                }
+                parkedAfterSessionStop = false
+            }
+        }
+        when (hydratePersistedQueueIfNeeded()) {
+            PlaybackHydrationResult.Empty,
+            PlaybackHydrationResult.Failed,
+            -> return
+
+            else -> playCurrentTrack()
+        }
+    }
+
+    private suspend fun resumeAfterSessionStopLocked() {
+        val snapshot = mutableSnapshot.value
+        // 停止驻留态的权威进度在数据库光标里;实时位置已归零,不再作为恢复依据。
+        val persistedPositionMs = runCatching {
+            database.playbackQueueSnapshotDao().get()?.positionMs
+        }.onFailure { failure ->
+            logger.warn(PLAYBACK_LOG_TAG) {
+                "resume-after-stop-cursor-read-failed cause=${failure.message.orEmpty()}"
+            }
+        }.getOrNull()?.coerceAtLeast(0L)
+        val targetPositionMs = persistedPositionMs ?: snapshot.positionMs.coerceAtLeast(0L)
+        parkedAfterSessionStop = false
+        gateway.seekTo(targetPositionMs)
+        val acceptedPositionMs = seekPositionAfterCommand(targetPositionMs).coerceAtLeast(0L)
+        mutableSnapshot.update { it.copy(positionMs = acceptedPositionMs) }
+        gateway.play()
+        logger.warn(PLAYBACK_LOG_TAG) {
+            "repository-resume-after-stop track=${snapshot.currentTrack?.id.orEmpty()} " +
+                "targetPositionMs=$targetPositionMs acceptedPositionMs=$acceptedPositionMs"
+        }
+    }
+
     override suspend fun skipNext() {
         val loadRequest = playbackCommandMutex.withLock {
             advanceLocked(autoTriggered = false)
@@ -583,6 +677,11 @@ class DefaultPlaybackRepository(
     private suspend fun playCurrentTrack() {
         playbackCommandMutex.withLock {
             if (mutableSnapshot.value.currentTrack == null) return
+            if (parkedAfterSessionStop) {
+                // 停止驻留态下系统媒体键「播放」同样从已保存光标续播。
+                resumeAfterSessionStopLocked()
+                return@withLock
+            }
             gateway.play()
         }
     }
@@ -932,6 +1031,8 @@ class DefaultPlaybackRepository(
     ): PlaybackLoadRequest {
         val requestId = latestLoadRequestId + 1L
         latestLoadRequestId = requestId
+        // 新的加载请求意味着新的播放会话,解除「停止驻留」对光标落盘的抑制。
+        parkedAfterSessionStop = false
         logger.debug(PLAYBACK_LOG_TAG) {
             "load-enqueued request=$requestId track=${track.id} locator=${track.mediaLocator} " +
                 "playWhenReady=$playWhenReady startPositionMs=$startPositionMs"
@@ -985,13 +1086,13 @@ class DefaultPlaybackRepository(
     }
 
     private suspend fun persistSnapshotContentIfPersistent() {
-        if (!currentQueueIsTransient) {
+        if (!currentQueueIsTransient && !parkedAfterSessionStop) {
             persistSnapshotContent()
         }
     }
 
     private suspend fun persistSnapshotCursorIfPersistent() {
-        if (!currentQueueIsTransient) {
+        if (!currentQueueIsTransient && !parkedAfterSessionStop) {
             persistSnapshotCursor()
         }
     }

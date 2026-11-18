@@ -100,6 +100,21 @@ internal class AndroidServiceBackedPlaybackRepository(
         repository().togglePlayPause()
     }
 
+    override suspend fun prepareCompleteExit() {
+        Log.w(ANDROID_SERVICE_REPOSITORY_LOG_TAG, "client-prepare-complete-exit")
+        repository().prepareCompleteExit()
+    }
+
+    override suspend fun stopPlaybackForSession() {
+        Log.w(ANDROID_SERVICE_REPOSITORY_LOG_TAG, "client-stop-for-session")
+        repository().stopPlaybackForSession()
+    }
+
+    override suspend fun resumeFromPersistedState() {
+        Log.w(ANDROID_SERVICE_REPOSITORY_LOG_TAG, "client-resume-from-persisted-state")
+        repository().resumeFromPersistedState()
+    }
+
     override suspend fun pause() {
         repository().pause()
     }

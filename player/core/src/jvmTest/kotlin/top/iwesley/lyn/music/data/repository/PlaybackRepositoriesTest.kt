@@ -99,6 +99,117 @@ class PlaybackRepositoriesTest {
 
 
     @Test
+    fun `stop playback for session persists cursor and parks without overwriting it`() = runTest {
+        val database = createTestDatabase()
+        val gateway = FakePlaybackGateway()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val repository = DefaultPlaybackRepository(
+            database, gateway, FakePlaybackPreferencesStore(), scope,
+            hydrateImmediately = false,
+        )
+        try {
+            repository.playTracks(sampleTracks(), 0)
+            advanceUntilIdle()
+            repository.seekTo(123_000L)
+            advanceUntilIdle()
+            assertEquals(123_000L, database.playbackQueueSnapshotDao().get()?.positionMs)
+
+            repository.stopPlaybackForSession()
+            advanceUntilIdle()
+
+            assertEquals(0L, repository.snapshot.value.positionMs)
+            assertEquals(false, repository.snapshot.value.isPlaying)
+            assertEquals(0L, gateway.state.value.positionMs)
+            assertEquals(false, gateway.state.value.isPlaying)
+            // 实时位置归零不得覆盖已落盘的光标。
+            assertEquals(123_000L, database.playbackQueueSnapshotDao().get()?.positionMs)
+
+            // 停止驻留态下的完全退出不得把 0 写回光标。
+            repository.prepareCompleteExit()
+            advanceUntilIdle()
+            assertEquals(123_000L, database.playbackQueueSnapshotDao().get()?.positionMs)
+        } finally {
+            repository.close()
+            scope.cancel()
+            advanceUntilIdle()
+            database.close()
+        }
+    }
+
+    @Test
+    fun `resume from persisted state after stop restores saved cursor and plays`() = runTest {
+        val database = createTestDatabase()
+        val gateway = FakePlaybackGateway()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val repository = DefaultPlaybackRepository(
+            database, gateway, FakePlaybackPreferencesStore(), scope,
+            hydrateImmediately = false,
+        )
+        try {
+            repository.playTracks(sampleTracks(), 0)
+            advanceUntilIdle()
+            repository.seekTo(87_500L)
+            advanceUntilIdle()
+            repository.stopPlaybackForSession()
+            advanceUntilIdle()
+
+            repository.resumeFromPersistedState()
+            advanceUntilIdle()
+
+            assertEquals(true, repository.snapshot.value.isPlaying)
+            assertEquals(87_500L, repository.snapshot.value.positionMs)
+            assertEquals(87_500L, gateway.state.value.positionMs)
+            assertEquals(true, gateway.state.value.isPlaying)
+            // 光标已在停止时落盘,恢复后无需重写。
+            assertEquals(87_500L, database.playbackQueueSnapshotDao().get()?.positionMs)
+        } finally {
+            repository.close()
+            scope.cancel()
+            advanceUntilIdle()
+            database.close()
+        }
+    }
+
+    @Test
+    fun `resume from persisted state with no current track hydrates queue and plays`() = runTest {
+        val database = createTestDatabase()
+        val tracks = sampleTracks(3)
+        database.trackDao().upsertAll(sampleTrackEntities(tracks))
+        database.playbackQueueSnapshotDao().upsert(
+            PlaybackQueueSnapshotEntity(
+                queueTrackIds = "track-1,track-2,track-3",
+                orderedQueueTrackIds = "track-1,track-2,track-3",
+                currentIndex = 1,
+                positionMs = 30_000L,
+                mode = PlaybackMode.ORDER.name,
+                updatedAt = 1L,
+            ),
+        )
+        val gateway = FakePlaybackGateway()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val repository = DefaultPlaybackRepository(
+            database, gateway, FakePlaybackPreferencesStore(), scope,
+            hydrateImmediately = false,
+        )
+        try {
+            repository.resumeFromPersistedState()
+            advanceUntilIdle()
+
+            assertEquals(true, repository.snapshot.value.isPlaying)
+            assertEquals(1, repository.snapshot.value.currentIndex)
+            assertEquals(30_000L, repository.snapshot.value.positionMs)
+            assertEquals(true, gateway.state.value.isPlaying)
+            assertEquals(30_000L, gateway.state.value.positionMs)
+        } finally {
+            repository.close()
+            scope.cancel()
+            advanceUntilIdle()
+            database.close()
+        }
+    }
+
+
+    @Test
     fun gatewayUiDescriptionsPropagateAndStaleDescriptionsAreClearedOnTrackSwitch() = runTest {
         val database = createTestDatabase()
         val gateway = BlockingPlaybackGateway()

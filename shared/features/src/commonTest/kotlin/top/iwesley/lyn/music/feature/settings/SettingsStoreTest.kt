@@ -1743,6 +1743,24 @@ class SettingsStoreTest : UiResourceTest() {
     }
 
     @Test
+    fun `request complete exit emits complete exit effect`() = runTest {
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val store = SettingsStore(
+            repository = FakeSettingsRepository(),
+            scope = scope,
+        )
+        val effects = mutableListOf<SettingsEffect>()
+        val effectJob = launch { store.effects.collect { effects += it } }
+
+        store.dispatch(SettingsIntent.RequestCompleteExit)
+        advanceUntilIdle()
+
+        assertLocalizedEquals(listOf<SettingsEffect>(SettingsEffect.CompleteExitRequested), effects)
+        effectJob.cancel()
+        scope.cancel()
+    }
+
+    @Test
     fun `pending cleanup disables location picker and retry clears residual path`() = runTest {
         val service = FakeAppDataLocationPlatformService(
             pendingCleanupRootPath = "C:\\Users\\tester\\.lynmusic.discarding",

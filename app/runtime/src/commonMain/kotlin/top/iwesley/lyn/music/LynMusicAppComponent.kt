@@ -25,6 +25,7 @@ import top.iwesley.lyn.music.core.model.MenuBarLyricsControlsPlatformService
 import top.iwesley.lyn.music.core.model.PlatformDescriptor
 import top.iwesley.lyn.music.data.repository.DefaultPlaybackRepository
 import top.iwesley.lyn.music.data.repository.LyricsRepository
+import top.iwesley.lyn.music.data.repository.PlaybackRepository
 import top.iwesley.lyn.music.data.repository.PlayerRuntimeServices
 import top.iwesley.lyn.music.feature.favorites.FavoritesStore
 import top.iwesley.lyn.music.feature.importing.ImportStore
@@ -59,6 +60,8 @@ class LynMusicAppComponent(
     val playerStore: PlayerStore,
     val settingsStore: SettingsStore,
     val lyricsRepository: LyricsRepository,
+    /** 完全退出序列使用:暂停+落盘光标(prepareCompleteExit)、断开客户端连接(close)。 */
+    val playbackRepository: PlaybackRepository,
     val artworkCacheStore: ArtworkCacheStore,
     val appDisplayScalePreset: StateFlow<AppDisplayScalePreset>,
     val carDisplayMode: StateFlow<CarDisplayMode>,
@@ -190,6 +193,7 @@ fun buildPlayerAppComponent(
         playerStore = playerStore,
         settingsStore = sharedGraph.settingsStore,
         lyricsRepository = sharedGraph.lyricsRepository,
+        playbackRepository = playbackRepository,
         artworkCacheStore = sharedGraph.artworkCacheStore,
         appDisplayScalePreset = sharedGraph.appDisplayScalePreset,
         carDisplayMode = sharedGraph.carDisplayMode,

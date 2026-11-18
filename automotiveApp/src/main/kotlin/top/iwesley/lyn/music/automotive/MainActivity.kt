@@ -30,7 +30,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import top.iwesley.lyn.music.ANDROID_AUTOMOTIVE_PLATFORM_NAME
+import top.iwesley.lyn.music.core.model.error
+import top.iwesley.lyn.music.core.model.info
 import kotlin.math.min
 import top.iwesley.lyn.music.automotive.ui.AutomotiveApp
 import top.iwesley.lyn.music.LynMusicAppComponent
@@ -41,6 +44,7 @@ import top.iwesley.lyn.music.core.model.CarDisplayMode
 import top.iwesley.lyn.music.feature.player.PlayerIntent
 import top.iwesley.lyn.music.feature.settings.SettingsIntent
 import top.iwesley.lyn.music.platform.AndroidExternalAudioOpenSupport
+import top.iwesley.lyn.music.platform.LynPlaybackMediaLibraryService
 import top.iwesley.lyn.music.platform.applyCarImmersiveMode
 import top.iwesley.lyn.music.platform.createAndroidRuntimeGraph
 import kotlin.math.roundToInt
@@ -54,6 +58,8 @@ class MainActivity : ComponentActivity() {
     private var externalAudioOpenRequestId = 0L
     private var currentImmersiveMode = false
     private val carDisplayObservationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val completeExitScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var completeExitTriggered = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         //enableEdgeToEdge()
@@ -92,6 +98,7 @@ class MainActivity : ComponentActivity() {
                         AutomotiveApp(
                             component = appComponent,
                             startupAutoOpenGate = startupAutoOpenViewModel.gate,
+                            onCompleteExitRequest = { performCompleteExit(appComponent) },
                         )
                     }
                 } else {
@@ -130,6 +137,44 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         externalAudioOpenScope.cancel()
         carDisplayObservationScope.cancel()
+        completeExitScope.cancel()
+    }
+
+    /**
+     * 完全退出序列(顺序严格):
+     * a. 暂停播放并显式落盘播放光标(prepareCompleteExit),下次启动 restorePlayback 从此续播;
+     * b. 断开 MediaController 客户端连接并停掉前台播放服务,清除媒体通知;
+     * c. finishAffinity() 结束任务栈 + Runtime.exit(0) 终止进程,不依赖系统回收。
+     */
+    private fun performCompleteExit(component: LynMusicAppComponent) {
+        if (completeExitTriggered) return
+        completeExitTriggered = true
+        val logger = component.logger
+        logger.info(COMPLETE_EXIT_LOG_TAG) { "complete-exit-requested" }
+        completeExitScope.launch {
+            // a. 暂停播放并显式保存光标;播放服务未就绪时超时兜底,不得卡死退出。
+            runCatching {
+                withTimeoutOrNull(COMPLETE_EXIT_PLAYBACK_PERSIST_TIMEOUT_MS) {
+                    component.playbackRepository.prepareCompleteExit()
+                }
+            }.onFailure { error ->
+                logger.error(COMPLETE_EXIT_LOG_TAG, error) { "complete-exit-persist-cursor-failed" }
+            }
+            // b. 断开 MediaController、停掉前台播放服务并清除媒体通知。
+            runCatching { component.playbackRepository.close() }
+                .onFailure { error ->
+                    logger.error(COMPLETE_EXIT_LOG_TAG, error) { "complete-exit-release-controller-failed" }
+                }
+            runCatching {
+                stopService(Intent(this@MainActivity, LynPlaybackMediaLibraryService::class.java))
+            }.onFailure { error ->
+                logger.error(COMPLETE_EXIT_LOG_TAG, error) { "complete-exit-stop-service-failed" }
+            }
+            // c. 结束任务栈并终止进程。
+            finishAffinity()
+            logger.info(COMPLETE_EXIT_LOG_TAG) { "complete-exit-now" }
+            Runtime.getRuntime().exit(0)
+        }
     }
 
     private fun applyCarDisplayOrientation(mode: CarDisplayMode?) {
@@ -265,3 +310,6 @@ private fun androidStableDensityScale(fallbackDensity: Float): Float {
     }.takeIf { it > 0 } ?: fallbackDpi.roundToInt()
     return stableDpi / DisplayMetrics.DENSITY_DEFAULT.toFloat()
 }
+
+private const val COMPLETE_EXIT_LOG_TAG = "CompleteExit"
+private const val COMPLETE_EXIT_PLAYBACK_PERSIST_TIMEOUT_MS = 2_000L

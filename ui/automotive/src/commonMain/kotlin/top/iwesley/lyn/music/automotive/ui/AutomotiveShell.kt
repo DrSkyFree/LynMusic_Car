@@ -1155,6 +1155,7 @@ private fun RootTabContent(
             state = myState,
             onMyIntent = onMyIntent,
             onPlayerIntent = onPlayerIntent,
+            onSettingsIntent = onSettingsIntent,
             onOpenAlbum = { albumId ->
                 onOpenLibraryNavigationTarget(LibraryNavigationTarget.Album(albumId))
             },

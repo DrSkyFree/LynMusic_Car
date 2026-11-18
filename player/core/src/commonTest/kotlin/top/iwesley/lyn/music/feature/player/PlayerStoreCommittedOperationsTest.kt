@@ -593,6 +593,9 @@ internal class CommitPlaybackRepository(initial: PlaybackSnapshot) : PlaybackRep
     override suspend fun playQueueIndex(index: Int) { snapshot.value = snapshot.value.copy(currentIndex = index) }
     override suspend fun togglePlayPause() = Unit
     override suspend fun pause() = Unit
+    override suspend fun prepareCompleteExit() = Unit
+    override suspend fun stopPlaybackForSession() = Unit
+    override suspend fun resumeFromPersistedState() = Unit
     override suspend fun skipNext() = Unit
     override suspend fun skipPrevious() = Unit
     override suspend fun seekTo(positionMs: Long) = Unit

@@ -67,6 +67,7 @@ fun AutomotiveApp(
     component: LynMusicAppComponent,
     startupAutoOpenGate: StartupAutoOpenGate,
     onExitApplicationRequest: () -> Unit = {},
+    onCompleteExitRequest: () -> Unit = {},
     startupWarning: UiText? = null,
 ) {
     ProvideUiLanguage {
@@ -383,6 +384,8 @@ fun AutomotiveApp(
                             component.playerStore.dispatch(PlayerIntent.InvalidateLyricsShareFontCache)
 
                         SettingsEffect.ExitApplicationRequested -> onExitApplicationRequest()
+
+                        SettingsEffect.CompleteExitRequested -> onCompleteExitRequest()
                     }
                 }
             }

@@ -19,4 +19,5 @@
     <string name="recommendations_today_playlist">Today's playlist</string>
     <string name="recommendations_empty_hint">Today's recommendations will appear once the library has songs.</string>
     <string name="recent_view_all_action">View all &gt;</string>
+    <string name="my_exit_app_action">Exit app</string>
 </resources>

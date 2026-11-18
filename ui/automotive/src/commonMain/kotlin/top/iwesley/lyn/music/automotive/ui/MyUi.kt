@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,6 +62,7 @@ import top.iwesley.lyn.music.core.model.trackArtworkCacheKey
 import top.iwesley.lyn.music.feature.my.MyIntent
 import top.iwesley.lyn.music.feature.my.MyState
 import top.iwesley.lyn.music.feature.player.PlayerIntent
+import top.iwesley.lyn.music.feature.settings.SettingsIntent
 import top.iwesley.lyn.music.automotive.ui.platform.PlatformBackHandler
 import top.iwesley.lyn.music.ui.mainShellColors
 
@@ -70,6 +72,7 @@ internal fun MyTab(
     state: MyState,
     onMyIntent: (MyIntent) -> Unit,
     onPlayerIntent: (PlayerIntent) -> Unit,
+    onSettingsIntent: (SettingsIntent) -> Unit,
     onOpenAlbum: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -132,6 +135,25 @@ internal fun MyTab(
         )),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        item {
+            // 页面右上角的完全退出入口:48dp+ 触控区,主驾可视。
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(
+                    onClick = { onSettingsIntent(SettingsIntent.RequestCompleteExit) },
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PowerSettingsNew,
+                        contentDescription = uiString(Res.string.my_exit_app_action),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+        }
         state.message?.let { message ->
             item {
                 BannerCard(

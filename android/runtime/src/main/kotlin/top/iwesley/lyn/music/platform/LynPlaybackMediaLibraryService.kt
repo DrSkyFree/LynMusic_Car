@@ -1,10 +1,12 @@
 package top.iwesley.lyn.music.platform
 
 import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingSimpleBasePlayer
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import top.iwesley.lyn.music.core.model.ArtworkCacheStore
 import top.iwesley.lyn.music.core.model.AndroidDiagnosticLogger
 import top.iwesley.lyn.music.core.model.CompositePlaybackStatsReporter
@@ -49,6 +52,7 @@ import top.iwesley.lyn.music.core.model.PlaybackSnapshot
 import top.iwesley.lyn.music.core.model.Track
 import top.iwesley.lyn.music.core.model.UiText
 import top.iwesley.lyn.music.core.model.diagnosticMessage
+import top.iwesley.lyn.music.core.model.error
 import top.iwesley.lyn.music.core.model.info
 import top.iwesley.lyn.music.core.model.trackArtworkCacheKey
 import top.iwesley.lyn.music.core.model.warn
@@ -81,6 +85,22 @@ class LynPlaybackMediaLibraryService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
         return runtime?.session
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val startResult = super.onStartCommand(intent, flags, startId)
+        // media3 父类(MediaSessionService.onStartCommand)对 media/custom action 以及
+        // intent 为空的系统重启路径都返回 START_STICKY,进程被杀后会重建空服务造成“复活”。
+        // 车机要求完全退出,这里统一降级为 START_NOT_STICKY。
+        return if (startResult == Service.START_STICKY) Service.START_NOT_STICKY else startResult
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // 车机语义:从最近任务移除即视为完全退出。media3 默认在播放中时保持后台运行
+        // (isPlaybackOngoing + isAnySessionPlaying),这里先保存光标并暂停,再停掉服务。
+        runtime?.stopPlaybackForTaskRemoved()
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -145,6 +165,19 @@ private class LynPlaybackServiceRuntime private constructor(
             repository.close()
         }
         serviceScope.cancel()
+    }
+
+    /** 最近任务移除:与完全退出共用同一保存入口落盘光标,再暂停,随后由服务 stopSelf。 */
+    fun stopPlaybackForTaskRemoved() {
+        runBlocking {
+            runCatching {
+                withTimeoutOrNull(TASK_REMOVED_PERSIST_TIMEOUT_MS) {
+                    repository.prepareCompleteExit()
+                }
+            }.onFailure { error ->
+                logger.error(SERVICE_PLAYBACK_LOG_TAG, error) { "task-removed-prepare-complete-exit-failed" }
+            }
+        }
     }
 
     private fun buildSessionActivityPendingIntent(context: Context): PendingIntent? {
@@ -430,6 +463,12 @@ internal class LynMediaSessionPlayer(
     private var lastSessionStateKey: Pair<Media3SessionStateKey, Boolean>? = null
     private var applicationErrorKey: Triple<String?, String?, UiText?>? = null
     private var applicationError: PlaybackException? = null
+    /** 「停止播放」后的会话驻留态:上报 STATE_IDLE(停止)并撤下通知/前台。 */
+    @Volatile
+    private var sessionParkedForStop = false
+    /** 语音/通知栏会重复下发 stop,窗口内的重复命令只执行一次。 */
+    @Volatile
+    private var lastStopCommandAtMs = 0L
 
     init {
         serviceScope.launch {
@@ -455,7 +494,7 @@ internal class LynMediaSessionPlayer(
         val snapshot = repository.snapshot.value
         val commands = Player.Commands.Builder()
             .addAll(state.availableCommands)
-            .remove(Player.COMMAND_STOP)
+            // COMMAND_STOP 保持可用:语音「停止播放」与蓝牙/通知栏的 stop 走 handleStop。
             .remove(Player.COMMAND_CHANGE_MEDIA_ITEMS)
             .add(Player.COMMAND_PLAY_PAUSE)
             .add(Player.COMMAND_PREPARE)
@@ -539,6 +578,15 @@ internal class LynMediaSessionPlayer(
                     setPlaylist(state.timeline, state.currentTracks, metadata)
                     setPlaylistMetadata(metadata)
                 }
+                if (sessionParkedForStop) {
+                    // 「停止播放」后的会话态:上报 STATE_IDLE(停止)、实时位置 0,
+                    // 系统据此撤下通知并把服务移出前台;持久化光标已在 stopPlaybackForSession 落盘。
+                    setPlayerError(null)
+                    setPlaybackState(Player.STATE_IDLE)
+                    setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+                    setIsLoading(false)
+                    setContentPositionMs(0L)
+                }
             }
             .build()
     }
@@ -549,11 +597,24 @@ internal class LynMediaSessionPlayer(
                 "session-handle-set-play-when-ready requested=$playWhenReady " +
                 "snapshotPlaying=${snapshot.isPlaying} track=${snapshot.currentTrack?.id.orEmpty()} " +
                 "index=${snapshot.currentIndex} position=${snapshot.positionMs} " +
-                "playerPlayWhenReady=${this.playWhenReady} playerState=$playbackState"
+                "playerPlayWhenReady=${this.playWhenReady} playerState=$playbackState " +
+                "parkedForStop=$sessionParkedForStop"
         }
         serviceScope.launch {
             if (playWhenReady) {
-                if (!repository.snapshot.value.isPlaying) {
+                val shouldResumeFromPersistedState = sessionParkedForStop ||
+                    repository.snapshot.value.currentTrack == null
+                if (shouldResumeFromPersistedState) {
+                    // 语音「开始播放」三态之一:停止驻留态从已保存光标续播;
+                    // 无音源(未水合)时先恢复持久队列,再从上次保存位置续播。幂等。
+                    clearSessionParkedForStop()
+                    runCatching { repository.resumeFromPersistedState() }
+                        .onFailure { error ->
+                            logger.error(SERVICE_PLAYBACK_LOG_TAG, error) {
+                                "session-resume-from-persisted-failed"
+                            }
+                        }
+                } else if (!repository.snapshot.value.isPlaying) {
                     repository.togglePlayPause()
                 }
             } else {
@@ -571,10 +632,30 @@ internal class LynMediaSessionPlayer(
     }
 
     override fun handleStop(): ListenableFuture<*> {
+        val nowElapsedMs = SystemClock.elapsedRealtime()
+        if (nowElapsedMs - lastStopCommandAtMs < STOP_COMMAND_DEDUPE_WINDOW_MS) {
+            logger.info(SERVICE_PLAYBACK_LOG_TAG) {
+                "session-handle-stop-deduped withinMs=${nowElapsedMs - lastStopCommandAtMs} " +
+                    "windowMs=$STOP_COMMAND_DEDUPE_WINDOW_MS"
+            }
+            return Futures.immediateVoidFuture()
+        }
+        lastStopCommandAtMs = nowElapsedMs
         val snapshot = repository.snapshot.value
         logger.warn(SERVICE_PLAYBACK_LOG_TAG) {
-            "session-handle-stop-ignored snapshotPlaying=${snapshot.isPlaying} track=${snapshot.currentTrack?.id.orEmpty()} " +
-                "position=${snapshot.positionMs}"
+            "session-handle-stop track=${snapshot.currentTrack?.id.orEmpty()} " +
+                "snapshotPlaying=${snapshot.isPlaying} position=${snapshot.positionMs}"
+        }
+        serviceScope.launch {
+            runCatching { repository.stopPlaybackForSession() }
+                .onSuccess {
+                    // 保存光标→暂停→实时归零全部落定后再上报停止态,避免半途态。
+                    sessionParkedForStop = true
+                    invalidateState()
+                }
+                .onFailure { error ->
+                    logger.error(SERVICE_PLAYBACK_LOG_TAG, error) { "session-handle-stop-failed" }
+                }
         }
         return Futures.immediateVoidFuture()
     }
@@ -596,6 +677,8 @@ internal class LynMediaSessionPlayer(
                 "startPositionMs=$startPositionMs mediaId=${mediaId.orEmpty()}"
         }
         if (mediaId != null && CarMediaIds.parsePlayable(mediaId) != null) {
+            // 点播新内容解除「停止驻留」态;新加载请求同时解除仓库侧光标保护。
+            clearSessionParkedForStop()
             serviceScope.launch { playFromMediaId(mediaId) }
             return Futures.immediateVoidFuture()
         }
@@ -607,6 +690,27 @@ internal class LynMediaSessionPlayer(
         positionMs: Long,
         seekCommand: Int,
     ): ListenableFuture<*> {
+        if (sessionParkedForStop) {
+            // 停止驻留态下的换曲类 seek 视为新的播放动作,解除会话驻留态。
+            val shouldClearParked = when (seekCommand) {
+                Player.COMMAND_SEEK_TO_NEXT,
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                Player.COMMAND_SEEK_TO_PREVIOUS,
+                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                -> true
+
+                Player.COMMAND_SEEK_TO_MEDIA_ITEM -> {
+                    val snapshot = repository.snapshot.value
+                    val queueIndex = snapshot.sessionQueueIndexForMediaItemIndex(mediaItemIndex)
+                    queueIndex != null && queueIndex != snapshot.currentIndex
+                }
+
+                else -> false
+            }
+            if (shouldClearParked) {
+                clearSessionParkedForStop()
+            }
+        }
         serviceScope.launch {
             when (seekCommand) {
                 Player.COMMAND_SEEK_TO_NEXT,
@@ -649,6 +753,12 @@ internal class LynMediaSessionPlayer(
             return Futures.immediateVoidFuture()
         }
         return super.handleSetVolume(volume, volumeOperationType)
+    }
+
+    private fun clearSessionParkedForStop() {
+        if (!sessionParkedForStop) return
+        sessionParkedForStop = false
+        invalidateState()
     }
 
     private fun updateArtworkVersionObserver(snapshot: PlaybackSnapshot) {
@@ -1193,6 +1303,9 @@ private const val PLAYBACK_NOTIFICATION_ID = 3107
 private const val PLAYBACK_NOTIFICATION_CHANNEL_ID = "lynmusic.playback"
 private const val PLAYBACK_SESSION_ACTIVITY_REQUEST_CODE = 3108
 private const val MAX_SEARCH_RESULTS = 50
+/** 语音助手/通知栏会重复下发 stop;窗口内的重复命令直接忽略,只执行一次。 */
+private const val STOP_COMMAND_DEDUPE_WINDOW_MS = 1_500L
+private const val TASK_REMOVED_PERSIST_TIMEOUT_MS = 1_500L
 private const val ALBUM_KEY_SEPARATOR = "\u001F"
 private const val LYN_ARTWORK_URI_SCHEME = "lynmusic-artwork"
 private const val LYN_ARTWORK_URI_AUTHORITY = "playback"

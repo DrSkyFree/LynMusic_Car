@@ -1735,6 +1735,12 @@ private class FakeQueuePlaybackRepository(
         mutableSnapshot.value = mutableSnapshot.value.copy(isPlaying = false)
     }
 
+    override suspend fun prepareCompleteExit() = Unit
+
+    override suspend fun stopPlaybackForSession() = Unit
+
+    override suspend fun resumeFromPersistedState() = Unit
+
     override suspend fun skipNext() = Unit
 
     override suspend fun skipPrevious() = Unit

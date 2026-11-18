@@ -238,11 +238,15 @@ sealed interface SettingsIntent {
     data object Save : SettingsIntent
     data object Delete : SettingsIntent
     data object ClearMessage : SettingsIntent
+    data object RequestCompleteExit : SettingsIntent
 }
 
 sealed interface SettingsEffect {
     data object LyricsShareFontsChanged : SettingsEffect
     data object ExitApplicationRequested : SettingsEffect
+
+    /** 「我的」页电源按钮触发的完全退出:宿主按 保存光标→停服务→终止进程 序列执行。 */
+    data object CompleteExitRequested : SettingsEffect
 }
 
 private sealed interface DataLocationOperation {
@@ -771,6 +775,9 @@ class SettingsStore(
 
             SettingsIntent.ConfirmDataLocationRestart ->
                 emitEffect(SettingsEffect.ExitApplicationRequested)
+
+            SettingsIntent.RequestCompleteExit ->
+                emitEffect(SettingsEffect.CompleteExitRequested)
 
             is SettingsIntent.LoadDeviceInfo -> loadDeviceInfo(force = intent.force)
 
