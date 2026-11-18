@@ -50,6 +50,20 @@ jobs:
           ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
         run: ./gradlew clean :automotiveApp:assembleRelease
 
+      - name: Verify APK signatures (fingerprint check, fail on unsigned)
+        shell: bash
+        run: |
+          SDK_DIR="$ANDROID_HOME"
+          APKSIGNER=$(find "$SDK_DIR/build-tools" -name "apksigner" -type f | sort -V | tail -1)
+          echo "apksigner: $APKSIGNER"
+          FAIL=0
+          for apk in automotiveApp/build/outputs/apk/release/*.apk; do
+            echo "--- $apk ---"
+            "$APKSIGNER" verify --print-certs "$apk" | tee /tmp/cert.txt
+            grep -q "Signer #1 certificate SHA-256 digest" /tmp/cert.txt || { echo "未检测到签名: $apk"; FAIL=1; }
+          done
+          exit $FAIL
+
       - name: Upload Car Release APKs
         uses: actions/upload-artifact@v4
         with:

@@ -701,6 +701,10 @@ private fun automotiveTransparentSliderColors() = SliderDefaults.colors(
     disabledInactiveTickColor = Color.Transparent,
 )
 
+// M6 driver-priority layout: the high-frequency transport cluster (previous / play-pause /
+// next) stays left-aligned inside the left third of the row, closest to the driver seat,
+// while the low-frequency secondary cluster (playback mode / queue) is pushed to the right
+// edge. A weighted spacer keeps the two clusters apart without centering them.
 @Composable
 private fun AutomotivePlaybackControls(
     snapshot: PlaybackSnapshot,
@@ -711,19 +715,9 @@ private fun AutomotivePlaybackControls(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (layout.showSecondaryControls) {
-            AutomotiveRoundIconButton(
-                icon = playbackModeIcon(snapshot.mode),
-                contentDescription = uiString(Res.string.player_change_playback_mode),
-                onClick = { onPlayerIntent(PlayerIntent.CycleMode) },
-                buttonSize = layout.actionButtonSize,
-                iconSize = layout.actionIconSize,
-            )
-            Spacer(Modifier.width(layout.controlGap))
-        }
         AutomotiveRoundIconButton(
             icon = Icons.Rounded.SkipPrevious,
             contentDescription = uiString(Res.string.player_previous_track),
@@ -747,15 +741,25 @@ private fun AutomotivePlaybackControls(
             buttonSize = layout.skipButtonSize,
             iconSize = layout.skipIconSize,
         )
+        Spacer(Modifier.weight(1f))
         if (layout.showSecondaryControls) {
-            Spacer(Modifier.width(layout.controlGap))
-            AutomotiveRoundIconButton(
-                icon = Icons.AutoMirrored.Rounded.QueueMusic,
-                contentDescription = uiString(Res.string.player_queue_title),
-                onClick = onOpenQueue,
-                buttonSize = layout.actionButtonSize,
-                iconSize = layout.actionIconSize,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AutomotiveRoundIconButton(
+                    icon = playbackModeIcon(snapshot.mode),
+                    contentDescription = uiString(Res.string.player_change_playback_mode),
+                    onClick = { onPlayerIntent(PlayerIntent.CycleMode) },
+                    buttonSize = layout.actionButtonSize,
+                    iconSize = layout.actionIconSize,
+                )
+                Spacer(Modifier.width(layout.controlGap))
+                AutomotiveRoundIconButton(
+                    icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                    contentDescription = uiString(Res.string.player_queue_title),
+                    onClick = onOpenQueue,
+                    buttonSize = layout.actionButtonSize,
+                    iconSize = layout.actionIconSize,
+                )
+            }
         }
     }
 }
@@ -939,6 +943,11 @@ private data class AutomotiveTwoFingerTapTracker(
     var isValid: Boolean = true,
 )
 
+// M6 driver-priority layout metrics. The transport cluster (previous / play-pause / next)
+// renders on the left of the row, the secondary cluster (mode / queue) on the right, so the
+// row is laid out as two packed clusters joined by a weighted spacer instead of one centered
+// run. Every tier keeps the high-frequency buttons at 56 dp or larger; the emergency
+// fit-to-width path may still shrink them toward the 48 dp touch floor on ultra-narrow panes.
 internal data class AutomotivePlaybackControlsLayout(
     val showSecondaryControls: Boolean,
     val actionButtonSize: Dp,
@@ -955,9 +964,11 @@ internal val AutomotivePlaybackControlsLayout.totalWidth: Dp
         val primaryControlsWidth =
             skipButtonSize + skipButtonSize + playButtonSize + controlGap + controlGap
         return if (showSecondaryControls) {
+            // Left cluster keeps two gaps (previous-play, play-next); the right cluster adds
+            // the two action buttons joined by a single gap before the right edge.
             primaryControlsWidth +
                 actionButtonSize + actionButtonSize +
-                controlGap + controlGap
+                controlGap
         } else {
             primaryControlsWidth
         }
@@ -971,12 +982,14 @@ internal fun resolveAutomotivePlaybackControlsLayout(
     appDisplayScalePreset: AppDisplayScalePreset = AppDisplayScalePreset.Default,
 ): AutomotivePlaybackControlsLayout {
     val preferredLayout = when {
-        referenceMaxWidth < 252.dp -> automotivePrimaryCompactControlsLayout()
+        // Below 268 dp a five-button row with 56 dp transport buttons no longer fits
+        // (56*2 + 60 + 48*2), so only the high-frequency cluster is shown.
+        referenceMaxWidth < 268.dp -> automotivePrimaryCompactControlsLayout()
 
         referenceMaxWidth < 288.dp || referenceMaxHeight < 480.dp -> AutomotivePlaybackControlsLayout(
             showSecondaryControls = true,
             actionButtonSize = 48.dp,
-            skipButtonSize = 48.dp,
+            skipButtonSize = 56.dp,
             playButtonSize = 60.dp,
             actionIconSize = 22.dp,
             skipIconSize = 26.dp,
@@ -1035,7 +1048,7 @@ private fun automotivePrimaryCompactControlsLayout(): AutomotivePlaybackControls
     AutomotivePlaybackControlsLayout(
         showSecondaryControls = false,
         actionButtonSize = 48.dp,
-        skipButtonSize = 48.dp,
+        skipButtonSize = 56.dp,
         playButtonSize = 60.dp,
         actionIconSize = 22.dp,
         skipIconSize = 26.dp,

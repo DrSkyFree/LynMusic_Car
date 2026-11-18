@@ -294,7 +294,7 @@ class AutomotivePlayerUiLogicTest {
 
     @Test
     fun `large preset keeps primary controls until five controls preserve physical size`() {
-        listOf(240.dp, 246.dp).forEach { maxWidth ->
+        listOf(240.dp, 246.dp, 247.dp).forEach { maxWidth ->
             val layout = resolveAutomotivePlaybackControlsLayout(
                 maxWidth = maxWidth,
                 maxHeight = 600.dp,
@@ -307,8 +307,10 @@ class AutomotivePlayerUiLogicTest {
             assertEquals(60.dp, layout.playButtonSize)
             assertTrue(layout.playButtonSize * AppDisplayScalePreset.Large.scale > 60.dp)
         }
+        // With 56 dp transport buttons the five-button row preserves physical size only from
+        // ~252.4 dp on under the Large preset, so the five-control band starts above it.
         val firstFiveControlsLayout = resolveAutomotivePlaybackControlsLayout(
-            maxWidth = 247.dp,
+            maxWidth = 253.dp,
             maxHeight = 600.dp,
             referenceMaxWidth = 268.dp,
             referenceMaxHeight = 600.dp,
@@ -316,7 +318,7 @@ class AutomotivePlayerUiLogicTest {
         )
 
         assertEquals(true, firstFiveControlsLayout.showSecondaryControls)
-        assertTrue(firstFiveControlsLayout.totalWidth <= 247.dp)
+        assertTrue(firstFiveControlsLayout.totalWidth <= 253.dp)
         assertTrue(firstFiveControlsLayout.playButtonSize * AppDisplayScalePreset.Large.scale >= 60.dp)
     }
 
@@ -337,27 +339,27 @@ class AutomotivePlayerUiLogicTest {
     }
 
     @Test
-    fun `playback controls hide secondary actions below 252 dp width`() {
-        listOf(200.dp, 251.dp).forEach { maxWidth ->
+    fun `playback controls hide secondary actions below 268 dp width`() {
+        listOf(200.dp, 251.dp, 267.dp).forEach { maxWidth ->
             val layout = resolveAutomotivePlaybackControlsLayout(
                 maxWidth = maxWidth,
                 maxHeight = 800.dp,
             )
 
             assertEquals(false, layout.showSecondaryControls)
-            assertEquals(48.dp, layout.skipButtonSize)
+            assertEquals(56.dp, layout.skipButtonSize)
             assertEquals(60.dp, layout.playButtonSize)
             assertEquals(26.dp, layout.skipIconSize)
             assertEquals(46.dp, layout.playIconSize)
             assertEquals(4.dp, layout.controlGap)
-            assertEquals(164.dp, layout.totalWidth)
+            assertEquals(180.dp, layout.totalWidth)
             assertTrue(layout.totalWidth <= maxWidth)
         }
     }
 
     @Test
-    fun `playback controls show safe compact five button layout from 252 through 287 dp`() {
-        listOf(252.dp, 287.dp).forEach { maxWidth ->
+    fun `playback controls show safe compact five button layout from 268 through 287 dp`() {
+        listOf(268.dp, 287.dp).forEach { maxWidth ->
             val layout = resolveAutomotivePlaybackControlsLayout(
                 maxWidth = maxWidth,
                 maxHeight = 800.dp,
@@ -365,13 +367,13 @@ class AutomotivePlayerUiLogicTest {
 
             assertEquals(true, layout.showSecondaryControls)
             assertEquals(48.dp, layout.actionButtonSize)
-            assertEquals(48.dp, layout.skipButtonSize)
+            assertEquals(56.dp, layout.skipButtonSize)
             assertEquals(60.dp, layout.playButtonSize)
             assertEquals(22.dp, layout.actionIconSize)
             assertEquals(26.dp, layout.skipIconSize)
             assertEquals(46.dp, layout.playIconSize)
             assertEquals(0.dp, layout.controlGap)
-            assertEquals(252.dp, layout.totalWidth)
+            assertEquals(268.dp, layout.totalWidth)
             assertTrue(layout.totalWidth <= maxWidth)
         }
     }
@@ -435,7 +437,7 @@ class AutomotivePlayerUiLogicTest {
 
         assertEquals(true, layout.showSecondaryControls)
         assertEquals(48.dp, layout.actionButtonSize)
-        assertEquals(48.dp, layout.skipButtonSize)
+        assertEquals(56.dp, layout.skipButtonSize)
         assertEquals(60.dp, layout.playButtonSize)
         assertEquals(22.dp, layout.actionIconSize)
         assertEquals(26.dp, layout.skipIconSize)
@@ -496,6 +498,27 @@ class AutomotivePlayerUiLogicTest {
             if (layout.showSecondaryControls) {
                 assertTrue(layout.actionButtonSize >= 48.dp)
             }
+        }
+    }
+
+    @Test
+    fun `playback controls keep high frequency transport buttons at 56 dp or larger`() {
+        val layouts = listOf(
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 200.dp, maxHeight = 800.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 252.dp, maxHeight = 800.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 268.dp, maxHeight = 800.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 288.dp, maxHeight = 800.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 399.dp, maxHeight = 800.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 400.dp, maxHeight = 800.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 519.dp, maxHeight = 800.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 520.dp, maxHeight = 424.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 520.dp, maxHeight = 520.dp),
+            resolveAutomotivePlaybackControlsLayout(maxWidth = 1280.dp, maxHeight = 752.dp),
+        )
+
+        layouts.forEach { layout ->
+            assertTrue(layout.skipButtonSize >= 56.dp, "skip ${layout.skipButtonSize}")
+            assertTrue(layout.playButtonSize >= 56.dp, "play ${layout.playButtonSize}")
         }
     }
 

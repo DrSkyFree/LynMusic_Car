@@ -40,8 +40,13 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // M6 size milestone: enable R8 code shrinking and resource shrinking.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
@@ -73,7 +78,12 @@ kotlin {
 
 dependencies {
     implementation(project(":shared:resources"))
-    implementation(project(":android:runtime"))
+    implementation(project(":android:runtime")) {
+        // sardine-android -> simple-xml -> xpp3 ships org.xmlpull.v1 as program classes,
+        // which conflicts with the identical platform library classes under R8. The
+        // platform's kxml2 implementation backs simple-xml at runtime.
+        exclude(group = "xpp3", module = "xpp3")
+    }
     implementation(project(":ui:automotive"))
     implementation(project(":app:runtime"))
     implementation(libs.androidx.activity.compose)

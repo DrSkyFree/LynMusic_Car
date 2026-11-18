@@ -1886,19 +1886,14 @@ private fun PlayerBottomControls(
                     color = Color.White,
                 )
             }
+            // M6 driver-priority layout: the high-frequency transport cluster
+            // (previous / play-pause / next) sits on the left edge, the low-frequency
+            // cluster (playback mode / queue) is pushed to the right edge.
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = { onPlayerIntent(PlayerIntent.CycleMode) }, modifier = Modifier.size(mobileModeButtonSize)) {
-                    Icon(
-                        imageVector = playbackModeIcon(snapshot.mode),
-                        contentDescription = null,
-                        modifier = Modifier.size(mobileModeIconSize),
-                        tint = Color.White.copy(alpha = 0.92f),
-                    )
-                }
                 IconButton(onClick = { onPlayerIntent(PlayerIntent.SkipPrevious) }, modifier = Modifier.size(mobileSkipButtonSize)) {
                     Icon(
                         imageVector = Icons.Rounded.SkipPrevious,
@@ -1923,12 +1918,23 @@ private fun PlayerBottomControls(
                         tint = Color.White.copy(alpha = 0.92f),
                     )
                 }
-                QueueToggleButton(
-                    onClick = onOpenQueue,
-                    tint = Color.White.copy(alpha = 0.96f),
-                    buttonSize = mobileBottomActionButtonSize,
-                    iconSize = mobileBottomActionIconSize,
-                )
+                Spacer(Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onPlayerIntent(PlayerIntent.CycleMode) }, modifier = Modifier.size(mobileModeButtonSize)) {
+                        Icon(
+                            imageVector = playbackModeIcon(snapshot.mode),
+                            contentDescription = null,
+                            modifier = Modifier.size(mobileModeIconSize),
+                            tint = Color.White.copy(alpha = 0.92f),
+                        )
+                    }
+                    QueueToggleButton(
+                        onClick = onOpenQueue,
+                        tint = Color.White.copy(alpha = 0.96f),
+                        buttonSize = mobileBottomActionButtonSize,
+                        iconSize = mobileBottomActionIconSize,
+                    )
+                }
             }
         }
         return
@@ -1958,33 +1964,20 @@ private fun PlayerBottomControls(
                 )
             }
             if (wide) {
+                // M6 driver-priority layout: the high-frequency transport cluster
+                // (previous / play-pause / next) takes the left edge, the source tag stays
+                // centered, and every low-frequency control (mode / queue / add / sleep /
+                // favorite / volume) packs against the right edge.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(
-                        text = track.sourceId.substringBefore('-').uppercase(),
-                        modifier = Modifier.weight(0.30f),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
                     Row(
                         modifier = Modifier.weight(0.40f),
-                        horizontalArrangement = Arrangement.Center,
+                        horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = { onPlayerIntent(PlayerIntent.CycleMode) }, modifier = Modifier.size(modeButtonSize)) {
-                            Icon(
-                                imageVector = playbackModeIcon(snapshot.mode),
-                                contentDescription = null,
-                                modifier = Modifier.size(modeIconSize),
-                                tint = Color.White.copy(alpha = 0.92f),
-                            )
-                        }
                         IconButton(onClick = { onPlayerIntent(PlayerIntent.SkipPrevious) }, modifier = Modifier.size(skipButtonSize)) {
                             Icon(
                                 imageVector = Icons.Rounded.SkipPrevious,
@@ -2009,18 +2002,39 @@ private fun PlayerBottomControls(
                                 tint = Color.White.copy(alpha = 0.92f),
                             )
                         }
+                    }
+                    Text(
+                        text = track.sourceId.substringBefore('-').uppercase(),
+                        modifier = Modifier.weight(0.20f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(
+                        modifier = Modifier.weight(0.40f),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            PlaybackVolume(snapshot, onPlayerIntent, sliderWidthFraction = 0.5f)
+                        }
+                        IconButton(onClick = { onPlayerIntent(PlayerIntent.CycleMode) }, modifier = Modifier.size(modeButtonSize)) {
+                            Icon(
+                                imageVector = playbackModeIcon(snapshot.mode),
+                                contentDescription = null,
+                                modifier = Modifier.size(modeIconSize),
+                                tint = Color.White.copy(alpha = 0.92f),
+                            )
+                        }
                         QueueToggleButton(
                             onClick = onOpenQueue,
                             tint = Color.White.copy(alpha = 0.96f),
                             buttonSize = skipButtonSize,
                             iconSize = modeIconSize,
                         )
-                    }
-                    Row(
-                        modifier = Modifier.weight(0.30f),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
                         AddToPlaylistButton(
                             onClick = onOpenAddToPlaylist,
                             tint = Color.White.copy(alpha = 0.96f),
@@ -2036,9 +2050,6 @@ private fun PlayerBottomControls(
                             tint = favoriteTint,
                             enabled = canToggleFavorite,
                         )
-                        Box(modifier = Modifier.weight(1f)) {
-                            PlaybackVolume(snapshot, onPlayerIntent, sliderWidthFraction = 0.5f)
-                        }
                     }
                 }
             }
