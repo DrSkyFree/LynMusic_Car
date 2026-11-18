@@ -20,7 +20,7 @@
     <string name="tags_file_name_label">文件名</string>
     <string name="tags_genre_label">流派</string>
     <string name="tags_named_field_help">%1$s说明</string>
-    <string name="tags_local_import_hint">先在来源页导入本地文件夹，这里才会出现可编辑的歌曲列表。</string>
+    <string name="tags_local_import_hint">先在「设置 → 曲库管理」添加本地文件夹，这里才会出现可编辑的歌曲列表。</string>
     <string name="tags_loading_tracks">正在加载本地歌曲</string>
     <string name="tags_local_tracks_title">本地歌曲</string>
     <string name="tags_library_loading_hint">本地歌曲列表会在页面显示后继续异步整理，请稍候。</string>
@@ -41,7 +41,7 @@
     <string name="tags_folder_write_permission_hint">已授予文件权限的本地目录支持写回；未授权目录会以只读方式打开。</string>
     <string name="tags_switch_discards_changes_hint">当前歌曲的标签还没有保存，切换后这些改动会丢失。</string>
     <string name="tags_device_read_only_hint">当前设备仅支持查看本地标签。</string>
-    <string name="tags_saf_read_only_hint">当前歌曲通过 SAF 只读导入，暂不能保存修改。请在来源页重新扫描并授予“管理所有文件”权限。</string>
+    <string name="tags_saf_read_only_hint">当前歌曲通过 SAF 只读导入，暂不能保存修改。请在「设置 → 曲库管理」重新扫描并授予“管理所有文件”权限。</string>
     <string name="tags_track_number_label">音轨</string>
     <string name="tags_view_help">查看说明</string>
     <string name="tags_device_write_unsupported_hint">当前设备暂不支持写回音频标签。</string>

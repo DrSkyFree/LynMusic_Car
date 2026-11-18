@@ -20,7 +20,7 @@
     <string name="tags_file_name_label">檔案名</string>
     <string name="tags_genre_label">流派</string>
     <string name="tags_named_field_help">%1$s說明</string>
-    <string name="tags_local_import_hint">先在來源頁匯入本機資料夾，這裡才會出現可編輯的歌曲列表。</string>
+    <string name="tags_local_import_hint">先在「設定 → 曲庫管理」加入本機資料夾，這裡才會出現可編輯的歌曲列表。</string>
     <string name="tags_loading_tracks">正在加載本機歌曲</string>
     <string name="tags_local_tracks_title">本機歌曲</string>
     <string name="tags_library_loading_hint">本機歌曲列表會在頁面顯示後繼續異步整理，請稍候。</string>
@@ -41,7 +41,7 @@
     <string name="tags_folder_write_permission_hint">已授予檔案權限的本機目錄支持寫回；未授權目錄會以只讀方式打開。</string>
     <string name="tags_switch_discards_changes_hint">當前歌曲的標籤還沒有儲存，切換後這些改動會丟失。</string>
     <string name="tags_device_read_only_hint">當前設備僅支持查看本機標籤。</string>
-    <string name="tags_saf_read_only_hint">當前歌曲通過 SAF 只讀匯入，暫不能儲存修改。請在來源頁重新掃描並授予“管理所有檔案”權限。</string>
+    <string name="tags_saf_read_only_hint">當前歌曲通過 SAF 只讀匯入，暫不能儲存修改。請在「設定 → 曲庫管理」重新掃描並授予“管理所有檔案”權限。</string>
     <string name="tags_track_number_label">音軌</string>
     <string name="tags_view_help">查看說明</string>
     <string name="tags_device_write_unsupported_hint">當前設備暫不支持寫回音訊標籤。</string>

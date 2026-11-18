@@ -20,7 +20,7 @@
     <string name="tags_file_name_label">File name</string>
     <string name="tags_genre_label">Genre</string>
     <string name="tags_named_field_help">%1$s help</string>
-    <string name="tags_local_import_hint">Import a local folder on the Sources page to see editable songs here.</string>
+    <string name="tags_local_import_hint">Add a local folder under Settings → Library management to see editable songs here.</string>
     <string name="tags_loading_tracks">Loading local songs</string>
     <string name="tags_local_tracks_title">Local songs</string>
     <string name="tags_library_loading_hint">Local songs are still being organized in the background. Please wait.</string>
@@ -41,7 +41,7 @@
     <string name="tags_folder_write_permission_hint">Tags can be saved to local folders with file access permission. Other folders open as read-only.</string>
     <string name="tags_switch_discards_changes_hint">The song tags have not been saved. Switching songs will discard your changes.</string>
     <string name="tags_device_read_only_hint">This device only supports viewing local tags.</string>
-    <string name="tags_saf_read_only_hint">This song was imported as read-only through SAF. Rescan the source and grant Manage all files permission to save changes.</string>
+    <string name="tags_saf_read_only_hint">This song was imported as read-only through SAF. Rescan it under Settings → Library management and grant Manage all files permission to save changes.</string>
     <string name="tags_track_number_label">Track number</string>
     <string name="tags_view_help">View help</string>
     <string name="tags_device_write_unsupported_hint">Writing audio tags is not supported on this device yet.</string>
