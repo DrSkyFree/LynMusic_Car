@@ -6,8 +6,6 @@ enum class AppStorageCategory {
     Artwork,
     PlaybackCache,
     OfflineDownloads,
-    LyricsShareTemp,
-    TagEditTemp,
 }
 
 data class AppStorageCategoryUsage(

@@ -169,4 +169,19 @@
     <string name="library_scan_incremental_hint">僅更新新增與變化曲目,保留收藏與歌單引用</string>
     <string name="library_scan_auto_title">啓動後自動掃描</string>
     <string name="library_scan_auto_hint">應用啓動 1 分鐘後自動重掃 U 盤來源</string>
+    <string name="car_display_margin_top">上邊距</string>
+    <string name="car_display_margin_bottom">下邊距</string>
+    <string name="theme_scaling_settings_title">主題與縮放</string>
+    <string name="theme_scaling_settings_description">切換預設主題與自訂配色,並調整車機裝置的顯示佈局、介面縮放與邊距。</string>
+    <string name="theme_scaling_settings_summary">主題、配色與車機顯示縮放。</string>
+    <string name="library_management_title">曲庫管理</string>
+    <string name="library_management_description">管理歌曲來源(本機資料夾、U 盤、網路來源)與曲庫掃描策略。</string>
+    <string name="library_management_summary">歌曲來源與曲庫掃描。</string>
+    <string name="lyrics_and_cover_settings_title">歌詞與封面</string>
+    <string name="lyrics_and_cover_settings_summary">從公開免費來源取得歌詞與封面。</string>
+    <string name="lyrics_fetch_enabled_title">線上取得歌詞</string>
+    <string name="lyrics_fetch_enabled_hint">透過 LRCLIB 等公開免費來源自動比對歌詞與時間軸。</string>
+    <string name="cover_fetch_enabled_title">線上取得封面</string>
+    <string name="cover_fetch_enabled_hint">播放時從公開來源自動比對專輯封面。</string>
+    <string name="lyrics_and_cover_source_notice">歌詞與封面皆來自公開免費來源,僅供個人學習與欣賞;個別歌曲無法比對時,可在播放頁手動搜尋並儲存。</string>
 </resources>

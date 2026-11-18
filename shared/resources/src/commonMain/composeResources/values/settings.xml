@@ -169,4 +169,19 @@
     <string name="library_scan_incremental_hint">Only updates new and changed tracks, keeping favorites and playlist references</string>
     <string name="library_scan_auto_title">Auto scan after launch</string>
     <string name="library_scan_auto_hint">Rescans USB sources one minute after app launch</string>
+    <string name="car_display_margin_top">Top margin</string>
+    <string name="car_display_margin_bottom">Bottom margin</string>
+    <string name="theme_scaling_settings_title">Theme &amp; scaling</string>
+    <string name="theme_scaling_settings_description">Switch preset themes and custom colors, and adjust the head-unit layout, UI scaling and margins.</string>
+    <string name="theme_scaling_settings_summary">Themes, colors and head-unit display scaling.</string>
+    <string name="library_management_title">Library management</string>
+    <string name="library_management_description">Manage song sources (local folders, USB drives, network sources) and library scanning.</string>
+    <string name="library_management_summary">Song sources and library scanning.</string>
+    <string name="lyrics_and_cover_settings_title">Lyrics &amp; artwork</string>
+    <string name="lyrics_and_cover_settings_summary">Fetch lyrics and artwork from public free sources.</string>
+    <string name="lyrics_fetch_enabled_title">Fetch lyrics online</string>
+    <string name="lyrics_fetch_enabled_hint">Automatically match lyrics and timestamps via public free sources such as LRCLIB.</string>
+    <string name="cover_fetch_enabled_title">Fetch artwork online</string>
+    <string name="cover_fetch_enabled_hint">Automatically match album artwork from public sources during playback.</string>
+    <string name="lyrics_and_cover_source_notice">Lyrics and artwork come from public free sources for personal study and listening only. When a track cannot be matched, search and save it manually from the player page.</string>
 </resources>

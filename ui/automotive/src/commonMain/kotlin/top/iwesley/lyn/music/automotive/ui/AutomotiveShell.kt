@@ -154,23 +154,25 @@ import top.iwesley.lyn.music.automotive.ui.platform.PlatformBackHandler
 import top.iwesley.lyn.music.ui.LynMusicTheme
 import top.iwesley.lyn.music.ui.mainShellColors
 
-internal val mobilePrimaryNavigationTabs: List<AppTab> = listOf(AppTab.Library, AppTab.My)
-internal val mobileLibraryHubTabs: List<AppTab> = listOf(AppTab.Library, AppTab.Favorites, AppTab.Playlists)
+internal val mobilePrimaryNavigationTabs: List<AppTab> = listOf(AppTab.My, AppTab.Library, AppTab.Settings)
 
-internal val automotivePortraitNavigationTabs = listOf(AppTab.Library, AppTab.Favorites, AppTab.My)
+internal val automotivePortraitNavigationTabs = listOf(AppTab.My, AppTab.Library, AppTab.Settings)
 internal val automotiveCollectionTabs = listOf(AppTab.Favorites, AppTab.Playlists)
 
 internal fun automotivePrimaryNavigationTabs(portraitNavigation: Boolean): List<AppTab> =
     if (portraitNavigation) automotivePortraitNavigationTabs else mobilePrimaryNavigationTabs
 
-internal fun libraryHubTabs(selectedTab: AppTab, portraitNavigation: Boolean): List<AppTab> = when {
-    !portraitNavigation -> mobileLibraryHubTabs
-    selectedTab == AppTab.Library -> listOf(AppTab.Library)
-    else -> automotiveCollectionTabs
+/**
+ * Maps every destination onto the three top-level entries: collections fold into
+ * "My", the sources page lives inside "Settings → Library management", and the tag
+ * editor opened from the library keeps "Library" highlighted.
+ */
+internal fun automotiveNavigationGroup(tab: AppTab): AppTab = when (tab) {
+    AppTab.Favorites, AppTab.Playlists -> AppTab.My
+    AppTab.Sources -> AppTab.Settings
+    AppTab.Tags -> AppTab.Library
+    else -> tab
 }
-
-internal fun automotiveNavigationGroup(tab: AppTab): AppTab =
-    if (tab in automotiveCollectionTabs) AppTab.Favorites else tab
 
 internal fun automotiveLibraryRootLabelText(root: LibraryBrowserRootView): UiText = when (root) {
     LibraryBrowserRootView.Tracks -> uiText(Res.string.library_tracks_title)
@@ -182,15 +184,16 @@ internal fun automotiveLibraryRootLabelText(root: LibraryBrowserRootView): UiTex
 @Composable
 internal fun automotiveLibraryRootLabel(root: LibraryBrowserRootView): String = automotiveLibraryRootLabelText(root).displayText()
 
-internal fun resolveAutomotiveTab(tab: AppTab): AppTab =
-    if (tab == AppTab.Tags) AppTab.Library else tab
-
-internal val automotiveMoreNavigationTabs = listOf(AppTab.Sources, AppTab.Settings)
+internal fun resolveAutomotiveTab(tab: AppTab): AppTab = when (tab) {
+    AppTab.Tags -> AppTab.Library
+    AppTab.Sources -> AppTab.Settings
+    else -> tab
+}
 
 internal val automotiveLandscapeNavigationTabs =
-    listOf(AppTab.My, AppTab.Library, AppTab.Favorites, AppTab.Playlists) + automotiveMoreNavigationTabs
+    listOf(AppTab.My, AppTab.Library, AppTab.Settings)
 
-internal fun isMobileLibraryHubTab(tab: AppTab): Boolean = tab in mobileLibraryHubTabs
+internal fun isMobileLibraryHubTab(tab: AppTab): Boolean = tab in automotiveCollectionTabs
 
 internal fun mobileLibraryHubSupportsTrackSort(tab: AppTab): Boolean {
     return tab == AppTab.Library || tab == AppTab.Favorites
@@ -199,20 +202,14 @@ internal fun mobileLibraryHubSupportsTrackSort(tab: AppTab): Boolean {
 internal fun isMobilePrimaryNavigationSelected(
     selectedTab: AppTab,
     navTab: AppTab,
-): Boolean {
-    return if (navTab == AppTab.Library) {
-        isMobileLibraryHubTab(selectedTab)
-    } else {
-        selectedTab == navTab
-    }
-}
+): Boolean = automotiveNavigationGroup(selectedTab) == navTab
 
 internal fun mobileLibraryHubPageForTab(tab: AppTab): Int {
-    return mobileLibraryHubTabs.indexOf(tab).takeIf { it >= 0 } ?: 0
+    return automotiveCollectionTabs.indexOf(tab).takeIf { it >= 0 } ?: 0
 }
 
 internal fun mobileLibraryHubTabForPage(page: Int): AppTab {
-    return mobileLibraryHubTabs.getOrElse(page) { AppTab.Library }
+    return automotiveCollectionTabs.getOrElse(page) { AppTab.Favorites }
 }
 
 internal fun mobileLibraryHubTabLabelText(tab: AppTab): UiText {
@@ -229,6 +226,23 @@ internal fun mobileLibraryHubTabLabelText(tab: AppTab): UiText {
 
 @Composable
 internal fun mobileLibraryHubTabLabel(tab: AppTab): String = mobileLibraryHubTabLabelText(tab).displayText()
+
+/**
+ * Shared iconography for the collapsed bottom bar, the liquid dock, and the landscape rail so a
+ * destination never changes shape between shell layouts.
+ */
+@Composable
+internal fun mobileNavigationIcon(tab: AppTab, selected: Boolean): androidx.compose.ui.graphics.vector.ImageVector {
+    return when (tab) {
+        AppTab.My -> Icons.Rounded.Person
+        AppTab.Library -> Icons.Rounded.LibraryMusic
+        AppTab.Settings -> Icons.Rounded.Settings
+        AppTab.Favorites -> if (selected) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
+        AppTab.Playlists -> Icons.AutoMirrored.Rounded.List
+        AppTab.Tags -> Icons.Rounded.LocalOffer
+        AppTab.Sources -> Icons.Rounded.FolderOpen
+    }
+}
 
 internal fun mobileLibraryHubSearchPlaceholderText(tab: AppTab): UiText {
     return when (tab) {
@@ -307,30 +321,23 @@ internal fun AutomotivePortraitShell(
     hideMiniPlayerBar: Boolean,
     onOpenAddToPlaylist: () -> Unit,
     onTabChanged: (AppTab) -> Unit = onTabSelected,
-    carContentMargin: Float = 0f,
+    carContentMarginTop: Float = 0f,
+    carContentMarginBottom: Float = 0f,
     carCoverScale: Float = 1f,
 ) {
     val presentation = currentPlayerPresentation()
     val navigationTabs = automotivePrimaryNavigationTabs(portraitNavigation)
-    var lastCollectionTab by rememberSaveable { mutableStateOf(AppTab.Favorites) }
     val contentStateHolder = rememberSaveableStateHolder()
     val dockBackdrop = if (portraitNavigation) rememberLayerBackdrop() else null
     val miniPlayerGlass = dockBackdrop?.let { miniPlayerGlassStyle(it) }
     val layoutDirection = LocalLayoutDirection.current
     val contentBehindDock = portraitNavigation &&
         (isMobileLibraryHubTab(selectedTab) || selectedTab == AppTab.My)
-    LaunchedEffect(selectedTab) {
-        if (selectedTab in automotiveCollectionTabs) lastCollectionTab = selectedTab
-    }
     val shellColors = mainShellColors
     val mobileNavIconSize = 29.dp
-    val moreTabs = automotiveMoreNavigationTabs
-    val isMoreSelected = selectedTab in moreTabs
     val showSettingsUpdateBadge = settingsState.appUpdateHasNewVersion == true
     val effectivePlayerSnapshot = playerState.effectiveSnapshot
     val keyboardController = LocalSoftwareKeyboardController.current
-    var isMoreSheetVisible by rememberSaveable { mutableStateOf(false) }
-    val moreSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val playerFavoriteBinding = playerFavoriteBinding(
         track = effectivePlayerSnapshot.currentTrack,
         localFavoriteTrackIds = favoritesState.favoriteTrackIds,
@@ -339,13 +346,7 @@ internal fun AutomotivePortraitShell(
     )
 
     fun selectMobileTab(tab: AppTab) {
-        if (portraitNavigation && tab in automotiveCollectionTabs) lastCollectionTab = tab
-        if (isMobileLibraryHubTab(selectedTab) &&
-            (!isMobileLibraryHubTab(tab) ||
-                (portraitNavigation && automotiveNavigationGroup(selectedTab) != automotiveNavigationGroup(tab)))
-        ) {
-            keyboardController?.hide()
-        }
+        keyboardController?.hide()
         onTabSelected(tab)
     }
 
@@ -403,36 +404,30 @@ internal fun AutomotivePortraitShell(
                         contentAlignment = Alignment.Center,
                     ) {
                         LiquidGlassDock(
-                            selectedIndex = when {
-                                isMoreSheetVisible || isMoreSelected -> 3
-                                else -> navigationTabs.indexOf(automotiveNavigationGroup(selectedTab)).coerceAtLeast(0)
-                            },
+                            selectedIndex = navigationTabs
+                                .indexOf(automotiveNavigationGroup(selectedTab))
+                                .coerceAtLeast(0),
                             backdrop = dockBackdrop,
+                            icons = navigationTabs.map { tab ->
+                                mobileNavigationIcon(tab, selected = automotiveNavigationGroup(selectedTab) == tab)
+                            },
+                            labels = navigationTabs.map { tab -> mobileLibraryHubTabLabel(tab) },
                             showUpdateBadge = showSettingsUpdateBadge,
-                            enabled = !isMoreSheetVisible && !presentation.isExpanded,
+                            badgeIndex = navigationTabs.indexOf(AppTab.Settings),
+                            enabled = !presentation.isExpanded,
                             onSelect = { index ->
-                                if (index == 3) {
-                                    isMoreSheetVisible = true
-                                } else {
-                                    isMoreSheetVisible = false
-                                    val tab = navigationTabs[index]
-                                    selectMobileTab(if (tab == AppTab.Favorites) lastCollectionTab else tab)
-                                }
+                                navigationTabs.getOrNull(index)?.let(::selectMobileTab)
                             },
                             modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth(),
                         )
                     }
                 } else NavigationBar(containerColor = shellColors.navContainer) {
                     navigationTabs.forEach { tab ->
-                        val label = if (portraitNavigation && tab == AppTab.Favorites) uiString(Res.string.favorites_collection_title) else mobileLibraryHubTabLabel(tab)
-                        val isSelected = if (portraitNavigation) automotiveNavigationGroup(selectedTab) == tab
-                        else isMobilePrimaryNavigationSelected(selectedTab, tab)
+                        val label = mobileLibraryHubTabLabel(tab)
+                        val isSelected = automotiveNavigationGroup(selectedTab) == tab
                         NavigationBarItem(
                             selected = isSelected,
-                            onClick = {
-                                isMoreSheetVisible = false
-                                selectMobileTab(if (portraitNavigation && tab == AppTab.Favorites) lastCollectionTab else tab)
-                            },
+                            onClick = { selectMobileTab(tab) },
                             // Label wraps up to 2 lines so enlarged font sizes stay fully visible.
                             label = {
                                 Text(
@@ -443,11 +438,7 @@ internal fun AutomotivePortraitShell(
                             },
                             icon = {
                                 Icon(
-                                    imageVector = when (tab) {
-                                        AppTab.My -> Icons.Rounded.Person
-                                        AppTab.Favorites -> if (isSelected) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
-                                        else -> Icons.Rounded.LibraryMusic
-                                    },
+                                    imageVector = mobileNavigationIcon(tab, selected = isSelected),
                                     contentDescription = label,
                                     modifier = Modifier.size(mobileNavIconSize),
                                 )
@@ -461,34 +452,6 @@ internal fun AutomotivePortraitShell(
                             ),
                         )
                     }
-                    NavigationBarItem(
-                        selected = isMoreSelected,
-                        onClick = { isMoreSheetVisible = true },
-                        // Label wraps up to 2 lines so enlarged font sizes stay fully visible.
-                        label = {
-                            Text(
-                                text = uiString(Res.string.common_more),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        icon = {
-                            BadgedIcon(
-                                imageVector = Icons.Rounded.MoreHoriz,
-                                contentDescription = uiString(Res.string.common_more),
-                                showBadge = showSettingsUpdateBadge,
-                                modifier = Modifier.size(mobileNavIconSize),
-                                iconModifier = Modifier.size(mobileNavIconSize),
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                            indicatorColor = Color.Transparent,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                    )
                 }
             }
         },
@@ -506,7 +469,7 @@ internal fun AutomotivePortraitShell(
                 } else Modifier)
                 .padding(contentPadding)
                 // Content-only margin: the bottom Dock (navigation) is never inset.
-                .proportionalShellContentMargin(carContentMargin),
+                .proportionalShellContentMargin(carContentMarginTop, carContentMarginBottom),
         ) {
             CompositionLocalProvider(
                 LocalDockBottomInset provides if (contentBehindDock) padding.calculateBottomPadding() else 0.dp,
@@ -551,98 +514,7 @@ internal fun AutomotivePortraitShell(
             }
         }
     }
-    if (isMoreSheetVisible) {
-        AutomotiveMoreSheet(
-            selectedTab = selectedTab,
-            sheetState = moreSheetState,
-            onDismiss = { isMoreSheetVisible = false },
-            onSelect = { tab ->
-                isMoreSheetVisible = false
-                selectMobileTab(tab)
-            },
-            tabs = moreTabs,
-            showSettingsUpdateBadge = showSettingsUpdateBadge,
-        )
-    }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AutomotiveMoreSheet(
-    selectedTab: AppTab,
-    sheetState: androidx.compose.material3.SheetState,
-    onDismiss: () -> Unit,
-    onSelect: (AppTab) -> Unit,
-    tabs: List<AppTab>,
-    showSettingsUpdateBadge: Boolean,
-) {
-    val shellColors = mainShellColors
-    val items = tabs.map { tab ->
-            val icon = when (tab) {
-                AppTab.Tags -> Icons.Rounded.Tune
-                AppTab.Sources -> Icons.Rounded.FolderOpen
-                AppTab.Settings -> Icons.Rounded.Settings
-                else -> Icons.Rounded.MoreHoriz
-            }
-            Triple(tab, icon, mobileLibraryHubTabLabel(tab))
-        }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = shellColors.navContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        dragHandle = null,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = uiString(Res.string.common_more),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-            )
-            items.forEach { (tab, icon, label) ->
-                val selected = selectedTab == tab
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.secondary
-                            else MaterialTheme.colorScheme.surface.copy(alpha = 0.34f),
-                        )
-                        .clickable { onSelect(tab) }
-                        .padding(horizontal = 16.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    BadgedIcon(
-                        imageVector = icon,
-                        contentDescription = label,
-                        showBadge = tab == AppTab.Settings && showSettingsUpdateBadge,
-                        modifier = Modifier.size(24.dp),
-                        tint = if (selected) {
-                            MaterialTheme.colorScheme.onSecondary
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
-                    )
-                    Text(
-                        text = label,
-                        color = if (selected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
 @Composable
 internal fun AutomotiveLandscapeShell(
     navigationRailState: WideNavigationRailState,
@@ -675,7 +547,8 @@ internal fun AutomotiveLandscapeShell(
     onOpenLibraryNavigationTarget: (LibraryNavigationTarget) -> Unit,
     onOpenAddToPlaylist: () -> Unit,
     onTabChanged: (AppTab) -> Unit = onTabSelected,
-    carContentMargin: Float = 0f,
+    carContentMarginTop: Float = 0f,
+    carContentMarginBottom: Float = 0f,
     carCoverScale: Float = 1f,
 ) {
     val presentation = currentPlayerPresentation()
@@ -715,7 +588,7 @@ internal fun AutomotiveLandscapeShell(
                 .weight(1f)
                 .fillMaxHeight()
                 // Content-only margin: the side navigation rail is never inset.
-                .proportionalShellContentMargin(carContentMargin),
+                .proportionalShellContentMargin(carContentMarginTop, carContentMarginBottom),
         ) {
             TabContent(
                 selectedTab = selectedTab,
@@ -792,38 +665,32 @@ internal fun AutomotiveLandscapeShell(
 // Insets the content by a fraction of the surrounding available size (horizontal from width,
 // vertical from height). A 0f fraction measures the content exactly as without the modifier.
 // Applied on the shell root content containers only — navigation (Dock / rail) stays full-bleed.
-private fun Modifier.proportionalShellContentMargin(fraction: Float): Modifier = layout { measurable, constraints ->
-    val safeFraction = fraction.coerceIn(0f, 1f)
-    val horizontalMargin = if (constraints.hasBoundedWidth) {
-        (constraints.maxWidth * safeFraction).roundToInt()
-    } else {
-        0
-    }
-    val verticalMargin = if (constraints.hasBoundedHeight) {
-        (constraints.maxHeight * safeFraction).roundToInt()
-    } else {
-        0
-    }
-    if (horizontalMargin <= 0 && verticalMargin <= 0) {
+private fun Modifier.proportionalShellContentMargin(
+    topFraction: Float,
+    bottomFraction: Float,
+): Modifier = layout { measurable, constraints ->
+    val safeTop = topFraction.coerceIn(0f, 1f)
+    val safeBottom = bottomFraction.coerceIn(0f, 1f)
+    val boundedHeight = constraints.hasBoundedHeight
+    val topMargin = if (boundedHeight) (constraints.maxHeight * safeTop).roundToInt() else 0
+    val bottomMargin = if (boundedHeight) (constraints.maxHeight * safeBottom).roundToInt() else 0
+    if (topMargin <= 0 && bottomMargin <= 0) {
         val placeable = measurable.measure(constraints)
         layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
     } else {
         val contentConstraints = constraints.copy(
             minWidth = 0,
             minHeight = 0,
-            maxWidth = (constraints.maxWidth - 2 * horizontalMargin).coerceAtLeast(0),
-            maxHeight = (constraints.maxHeight - 2 * verticalMargin).coerceAtLeast(0),
+            maxHeight = (constraints.maxHeight - topMargin - bottomMargin).coerceAtLeast(0),
         )
         val placeable = measurable.measure(contentConstraints)
         layout(
-            width = (placeable.width + 2 * horizontalMargin).coerceAtMost(
-                if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width,
-            ),
-            height = (placeable.height + 2 * verticalMargin).coerceAtMost(
-                if (constraints.hasBoundedHeight) constraints.maxHeight else placeable.height,
+            width = placeable.width,
+            height = (placeable.height + topMargin + bottomMargin).coerceAtMost(
+                if (boundedHeight) constraints.maxHeight else placeable.height,
             ),
         ) {
-            placeable.placeRelative(horizontalMargin, verticalMargin)
+            placeable.placeRelative(0, topMargin)
         }
     }
 }
@@ -1150,17 +1017,26 @@ private fun RootTabContent(
     }
 
     when (resolvedSelectedTab) {
-        AppTab.My -> MyTab(
-            platform = platform,
-            state = myState,
-            onMyIntent = onMyIntent,
-            onPlayerIntent = onPlayerIntent,
-            onSettingsIntent = onSettingsIntent,
-            onOpenAlbum = { albumId ->
-                onOpenLibraryNavigationTarget(LibraryNavigationTarget.Album(albumId))
-            },
-            modifier = modifier,
-        )
+        AppTab.My -> {
+            val detailNavigation = LocalMusicDetailNavigation.current
+            MyTab(
+                platform = platform,
+                state = myState,
+                onMyIntent = onMyIntent,
+                onPlayerIntent = onPlayerIntent,
+                onSettingsIntent = onSettingsIntent,
+                onOpenAlbum = { albumId ->
+                    onOpenLibraryNavigationTarget(LibraryNavigationTarget.Album(albumId))
+                },
+                onOpenPlaylists = { onTabSelected(AppTab.Playlists) },
+                onOpenFavorites = { onTabSelected(AppTab.Favorites) },
+                onOpenLibraryRoot = { root ->
+                    detailNavigation?.libraryRootState?.let { state -> state.value = root }
+                    onTabSelected(AppTab.Library)
+                },
+                modifier = modifier,
+            )
+        }
 
         AppTab.Library -> Unit // Handled by the shared, saveable library entry above.
 
@@ -1200,6 +1076,8 @@ private fun RootTabContent(
             state = settingsState,
             onSettingsIntent = onSettingsIntent,
             onOpenBackgroundRunSettings = onOpenBackgroundRunSettings,
+            importState = importState,
+            onImportIntent = onImportIntent,
             modifier = modifier,
         )
     }
@@ -1900,7 +1778,7 @@ private enum class MobileLibraryHubMenuLayer {
 @Composable
 private fun MobileLibraryHubTabStrip(
     selectedPage: Int,
-    tabs: List<AppTab> = mobileLibraryHubTabs,
+    tabs: List<AppTab> = automotiveCollectionTabs,
     rootTabs: List<LibraryBrowserRootView> = emptyList(),
     onRootTabClick: (LibraryBrowserRootView) -> Unit = {},
     searchEnabled: Boolean = true,

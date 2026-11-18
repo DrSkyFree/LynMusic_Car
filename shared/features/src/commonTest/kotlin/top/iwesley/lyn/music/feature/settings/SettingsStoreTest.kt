@@ -39,7 +39,8 @@ import top.iwesley.lyn.music.core.model.AppDataLocationChangeMode
 import top.iwesley.lyn.music.core.model.AppDataLocationPlatformService
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
 import top.iwesley.lyn.music.core.model.CarDisplayMode
-import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN_BOTTOM
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN_TOP
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_COVER_SCALE
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_DISPLAY_MODE
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_FONT_SCALE
@@ -1559,7 +1560,7 @@ class SettingsStoreTest : UiResourceTest() {
             initialSnapshot = sampleStorageSnapshot(
                 artwork = 1_024L,
                 playback = 2_048L,
-                lyricsShare = 256L,
+                offline = 256L,
             ),
         )
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
@@ -1924,8 +1925,7 @@ class SettingsStoreTest : UiResourceTest() {
             initialSnapshot = sampleStorageSnapshot(
                 artwork = 2_048L,
                 playback = 4_096L,
-                lyricsShare = 128L,
-                tagEdit = 64L,
+                offline = 128L,
             ),
         )
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
@@ -1938,7 +1938,7 @@ class SettingsStoreTest : UiResourceTest() {
         advanceUntilIdle()
 
         val state = store.state.value
-        assertLocalizedEquals(4_288L, state.storageSnapshot?.totalSizeBytes)
+        assertLocalizedEquals(4_224L, state.storageSnapshot?.totalSizeBytes)
         assertLocalizedEquals(0L, state.storageSnapshot?.categories?.first { it.category == AppStorageCategory.Artwork }?.sizeBytes)
         assertLocalizedEquals("封面缓存已清除。", state.message)
         assertLocalizedEquals(null, state.clearingStorageCategory)
@@ -2327,8 +2327,10 @@ private class FakeSettingsRepository(
     override val carFontScale: StateFlow<Float> = mutableCarFontScale
     private val mutableCarCoverScale = MutableStateFlow(DEFAULT_CAR_COVER_SCALE)
     override val carCoverScale: StateFlow<Float> = mutableCarCoverScale
-    private val mutableCarContentMargin = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN)
-    override val carContentMargin: StateFlow<Float> = mutableCarContentMargin
+    private val mutableCarContentMarginTop = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN_TOP)
+    override val carContentMarginTop: StateFlow<Float> = mutableCarContentMarginTop
+    private val mutableCarContentMarginBottom = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN_BOTTOM)
+    override val carContentMarginBottom: StateFlow<Float> = mutableCarContentMarginBottom
     private val mutableCarImmersiveMode = MutableStateFlow(DEFAULT_CAR_IMMERSIVE_MODE)
     override val carImmersiveMode: StateFlow<Boolean> = mutableCarImmersiveMode
     override val navidromeWifiAudioQuality: StateFlow<NavidromeAudioQuality> =
@@ -2429,8 +2431,12 @@ private class FakeSettingsRepository(
         mutableCarCoverScale.value = scale
     }
 
-    override suspend fun setCarContentMargin(margin: Float) {
-        mutableCarContentMargin.value = margin
+    override suspend fun setCarContentMarginTop(margin: Float) {
+        mutableCarContentMarginTop.value = margin
+    }
+
+    override suspend fun setCarContentMarginBottom(margin: Float) {
+        mutableCarContentMarginBottom.value = margin
     }
 
     override suspend fun setCarImmersiveMode(enabled: Boolean) {
@@ -2822,14 +2828,12 @@ private fun normalizeName(value: String): String = value.trim().lowercase()
 private fun sampleStorageSnapshot(
     artwork: Long = 0L,
     playback: Long = 0L,
-    lyricsShare: Long = 0L,
-    tagEdit: Long = 0L,
+    offline: Long = 0L,
 ): AppStorageSnapshot {
     val categories = listOfNotNull(
         AppStorageCategoryUsage(AppStorageCategory.Artwork, artwork),
         AppStorageCategoryUsage(AppStorageCategory.PlaybackCache, playback).takeIf { playback >= 0L },
-        AppStorageCategoryUsage(AppStorageCategory.LyricsShareTemp, lyricsShare).takeIf { lyricsShare >= 0L },
-        AppStorageCategoryUsage(AppStorageCategory.TagEditTemp, tagEdit).takeIf { tagEdit >= 0L },
+        AppStorageCategoryUsage(AppStorageCategory.OfflineDownloads, offline).takeIf { offline >= 0L },
     )
     return AppStorageSnapshot(
         totalSizeBytes = categories.sumOf { it.sizeBytes },

@@ -169,4 +169,19 @@
     <string name="library_scan_incremental_hint">仅更新新增与变化曲目,保留收藏与歌单引用</string>
     <string name="library_scan_auto_title">启动后自动扫描</string>
     <string name="library_scan_auto_hint">应用启动 1 分钟后自动重扫 U 盘来源</string>
+    <string name="car_display_margin_top">上边距</string>
+    <string name="car_display_margin_bottom">下边距</string>
+    <string name="theme_scaling_settings_title">主题与缩放</string>
+    <string name="theme_scaling_settings_description">切换预置主题与自定义配色,并调整车机设备的显示布局、界面缩放与边距。</string>
+    <string name="theme_scaling_settings_summary">主题、配色与车机显示缩放。</string>
+    <string name="library_management_title">曲库管理</string>
+    <string name="library_management_description">管理歌曲来源(本地文件夹、U 盘、网络来源)与曲库扫描策略。</string>
+    <string name="library_management_summary">歌曲来源与曲库扫描。</string>
+    <string name="lyrics_and_cover_settings_title">歌词与封面</string>
+    <string name="lyrics_and_cover_settings_summary">从公开免费渠道获取歌词与封面。</string>
+    <string name="lyrics_fetch_enabled_title">在线获取歌词</string>
+    <string name="lyrics_fetch_enabled_hint">通过 LRCLIB 等公开免费渠道自动匹配歌词与时间轴。</string>
+    <string name="cover_fetch_enabled_title">在线获取封面</string>
+    <string name="cover_fetch_enabled_hint">播放时从公开渠道自动匹配专辑封面。</string>
+    <string name="lyrics_and_cover_source_notice">歌词与封面均来自公开免费渠道,仅供个人学习与欣赏;个别歌曲无法匹配时,可在播放页手动搜索并保存。</string>
 </resources>

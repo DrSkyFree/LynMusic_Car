@@ -24,18 +24,32 @@ class AutomotiveNavigationTest {
     }
 
     @Test
-    fun `portrait collections and landscape navigation retain the existing car destinations`() {
-        assertEquals(listOf(AppTab.Library, AppTab.Favorites, AppTab.My), automotivePrimaryNavigationTabs(true))
-        assertEquals(listOf(AppTab.Library), libraryHubTabs(AppTab.Library, true))
-        assertEquals(listOf(AppTab.Favorites, AppTab.Playlists), libraryHubTabs(AppTab.Playlists, true))
-        assertEquals(AppTab.Favorites, automotiveNavigationGroup(AppTab.Playlists))
-        assertEquals(listOf(AppTab.Sources, AppTab.Settings), automotiveMoreNavigationTabs)
-        assertEquals(AppTab.entries.filter { it != AppTab.Tags }.toSet(), automotiveLandscapeNavigationTabs.toSet())
+    fun `car navigation converges on my library and settings`() {
+        val expected = listOf(AppTab.My, AppTab.Library, AppTab.Settings)
+        assertEquals(expected, automotivePrimaryNavigationTabs(true))
+        assertEquals(expected, automotivePrimaryNavigationTabs(false))
+        assertEquals(expected, automotiveLandscapeNavigationTabs)
     }
 
     @Test
-    fun `restored unsupported tags destination returns to library without changing other destinations`() {
+    fun `collections and sources fold into their parent destinations`() {
+        assertEquals(listOf(AppTab.Favorites, AppTab.Playlists), automotiveCollectionTabs)
+        assertEquals(AppTab.My, automotiveNavigationGroup(AppTab.Playlists))
+        assertEquals(AppTab.My, automotiveNavigationGroup(AppTab.Favorites))
+        assertEquals(AppTab.Settings, automotiveNavigationGroup(AppTab.Sources))
+        assertEquals(AppTab.Library, automotiveNavigationGroup(AppTab.Tags))
+        for (tab in listOf(AppTab.My, AppTab.Library, AppTab.Settings)) {
+            assertEquals(tab, automotiveNavigationGroup(tab))
+        }
+        assertTrue(isMobileLibraryHubTab(AppTab.Favorites))
+        assertTrue(isMobileLibraryHubTab(AppTab.Playlists))
+        assertFalse(isMobileLibraryHubTab(AppTab.Sources))
+    }
+
+    @Test
+    fun `restored unsupported tags and sources destinations land on a reachable tab`() {
         assertEquals(AppTab.Library, resolveAutomotiveTab(AppTab.Tags))
+        assertEquals(AppTab.Settings, resolveAutomotiveTab(AppTab.Sources))
         for (tab in automotiveLandscapeNavigationTabs) assertEquals(tab, resolveAutomotiveTab(tab))
     }
 }

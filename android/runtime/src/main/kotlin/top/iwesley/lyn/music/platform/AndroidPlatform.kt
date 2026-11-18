@@ -98,7 +98,8 @@ import top.iwesley.lyn.music.core.model.AndroidDiagnosticLogger
 import top.iwesley.lyn.music.core.model.AppDisplayPreferencesStore
 import top.iwesley.lyn.music.core.model.CarDisplayMode
 import top.iwesley.lyn.music.core.model.CarDisplayPreferencesStore
-import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN_BOTTOM
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN_TOP
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_COVER_SCALE
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_DISPLAY_MODE
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_IMMERSIVE_MODE
@@ -789,7 +790,12 @@ internal class AndroidAppPreferencesStore(
     private val mutableCarUiScale = MutableStateFlow(readCarScale(KEY_CAR_UI_SCALE, CAR_UI_SCALE_MIN, CAR_UI_SCALE_MAX, DEFAULT_CAR_UI_SCALE))
     private val mutableCarFontScale = MutableStateFlow(readCarScale(KEY_CAR_FONT_SCALE, CAR_FONT_SCALE_MIN, CAR_FONT_SCALE_MAX, DEFAULT_CAR_FONT_SCALE))
     private val mutableCarCoverScale = MutableStateFlow(readCarScale(KEY_CAR_COVER_SCALE, CAR_COVER_SCALE_MIN, CAR_COVER_SCALE_MAX, DEFAULT_CAR_COVER_SCALE))
-    private val mutableCarContentMargin = MutableStateFlow(readCarScale(KEY_CAR_CONTENT_MARGIN, CAR_CONTENT_MARGIN_MIN, CAR_CONTENT_MARGIN_MAX, DEFAULT_CAR_CONTENT_MARGIN))
+    private val mutableCarContentMarginTop = MutableStateFlow(
+        readCarMargin(KEY_CAR_CONTENT_MARGIN_TOP, DEFAULT_CAR_CONTENT_MARGIN_TOP),
+    )
+    private val mutableCarContentMarginBottom = MutableStateFlow(
+        readCarMargin(KEY_CAR_CONTENT_MARGIN_BOTTOM, DEFAULT_CAR_CONTENT_MARGIN_BOTTOM),
+    )
     private val mutableCarImmersiveMode = MutableStateFlow(
         preferences.getBoolean(KEY_CAR_IMMERSIVE_MODE, DEFAULT_CAR_IMMERSIVE_MODE),
     )
@@ -797,7 +803,8 @@ internal class AndroidAppPreferencesStore(
     override val carUiScale: StateFlow<Float> = mutableCarUiScale.asStateFlow()
     override val carFontScale: StateFlow<Float> = mutableCarFontScale.asStateFlow()
     override val carCoverScale: StateFlow<Float> = mutableCarCoverScale.asStateFlow()
-    override val carContentMargin: StateFlow<Float> = mutableCarContentMargin.asStateFlow()
+    override val carContentMarginTop: StateFlow<Float> = mutableCarContentMarginTop.asStateFlow()
+    override val carContentMarginBottom: StateFlow<Float> = mutableCarContentMarginBottom.asStateFlow()
     override val carImmersiveMode: StateFlow<Boolean> = mutableCarImmersiveMode.asStateFlow()
     private val mutableNavidromeWifiAudioQuality = MutableStateFlow(
         readNavidromeAudioQuality(KEY_NAVIDROME_WIFI_AUDIO_QUALITY, NavidromeAudioQuality.Original),
@@ -1053,10 +1060,26 @@ internal class AndroidAppPreferencesStore(
         mutableCarCoverScale.value = normalized
     }
 
-    override suspend fun setCarContentMargin(margin: Float) {
-        val normalized = normalizedCarDisplayValue(margin, CAR_CONTENT_MARGIN_MIN, CAR_CONTENT_MARGIN_MAX, DEFAULT_CAR_CONTENT_MARGIN)
-        preferences.edit().putFloat(KEY_CAR_CONTENT_MARGIN, normalized).apply()
-        mutableCarContentMargin.value = normalized
+    override suspend fun setCarContentMarginTop(margin: Float) {
+        val normalized = normalizedCarDisplayValue(
+            margin,
+            CAR_CONTENT_MARGIN_MIN,
+            CAR_CONTENT_MARGIN_MAX,
+            DEFAULT_CAR_CONTENT_MARGIN_TOP,
+        )
+        preferences.edit().putFloat(KEY_CAR_CONTENT_MARGIN_TOP, normalized).apply()
+        mutableCarContentMarginTop.value = normalized
+    }
+
+    override suspend fun setCarContentMarginBottom(margin: Float) {
+        val normalized = normalizedCarDisplayValue(
+            margin,
+            CAR_CONTENT_MARGIN_MIN,
+            CAR_CONTENT_MARGIN_MAX,
+            DEFAULT_CAR_CONTENT_MARGIN_BOTTOM,
+        )
+        preferences.edit().putFloat(KEY_CAR_CONTENT_MARGIN_BOTTOM, normalized).apply()
+        mutableCarContentMarginBottom.value = normalized
     }
 
     override suspend fun setCarImmersiveMode(enabled: Boolean) {
@@ -1211,6 +1234,23 @@ internal class AndroidAppPreferencesStore(
 
     private fun readCarDisplayMode(): CarDisplayMode {
         return carDisplayModeOrDefault(preferences.getString(KEY_CAR_DISPLAY_MODE, null))
+    }
+
+    private fun readCarMargin(key: String, fallback: Float): Float {
+        // 旧版单一 car_content_margin 键做一次性迁移:上下都取旧值,旧键保留不删。
+        if (!preferences.contains(key)) {
+            val legacy = preferences.getFloat(KEY_CAR_CONTENT_MARGIN_LEGACY, Float.NaN)
+            if (!legacy.isNaN()) {
+                return normalizedCarDisplayValue(
+                    legacy,
+                    CAR_CONTENT_MARGIN_MIN,
+                    CAR_CONTENT_MARGIN_MAX,
+                    fallback,
+                )
+            }
+        }
+        val stored = preferences.getFloat(key, fallback)
+        return normalizedCarDisplayValue(stored, CAR_CONTENT_MARGIN_MIN, CAR_CONTENT_MARGIN_MAX, fallback)
     }
 
     private fun readCarScale(key: String, min: Float, max: Float, fallback: Float): Float {
@@ -3971,7 +4011,9 @@ private const val KEY_CAR_DISPLAY_MODE = "car_display_mode"
 private const val KEY_CAR_UI_SCALE = "car_ui_scale"
 private const val KEY_CAR_FONT_SCALE = "car_font_scale"
 private const val KEY_CAR_COVER_SCALE = "car_cover_scale"
-private const val KEY_CAR_CONTENT_MARGIN = "car_content_margin"
+private const val KEY_CAR_CONTENT_MARGIN_TOP = "car_content_margin_top"
+private const val KEY_CAR_CONTENT_MARGIN_BOTTOM = "car_content_margin_bottom"
+private const val KEY_CAR_CONTENT_MARGIN_LEGACY = "car_content_margin"
 private const val KEY_CAR_IMMERSIVE_MODE = "car_immersive_mode"
 private const val KEY_NAVIDROME_WIFI_AUDIO_QUALITY = "navidrome_wifi_audio_quality"
 private const val KEY_NAVIDROME_MOBILE_AUDIO_QUALITY = "navidrome_mobile_audio_quality"

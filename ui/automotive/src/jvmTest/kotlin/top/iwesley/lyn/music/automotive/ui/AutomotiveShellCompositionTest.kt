@@ -87,16 +87,32 @@ class AutomotiveShellCompositionTest {
     }
 
     @Test
-    fun `portrait keeps all destinations accessible through collections and more`() = onUiThread {
+    fun `portrait keeps every primary destination reachable from the dock`() = onUiThread {
         Fixture(480, 900).use { ui ->
             ui.capture("portrait-library")
-            ui.clickLabel("Favorites")
-            assertEquals(AppTab.Favorites, ui.selectedTab)
-            ui.capture("portrait-collection")
-            ui.clickLabel("More")
-            ui.clickLabel("Settings")
-            assertEquals(AppTab.Settings, ui.selectedTab)
-            ui.capture("portrait-settings")
+            for (tab in listOf(AppTab.My, AppTab.Settings, AppTab.Library)) {
+                ui.clickLabel(ui.navigationLabel(tab))
+                assertEquals(tab, ui.selectedTab)
+                ui.capture("portrait-${tab.name.lowercase()}")
+            }
+        }
+    }
+
+    @Test
+    fun `my page entries open collections and library roots`() = onUiThread {
+        for ((width, height) in listOf(480 to 900, 1280 to 800)) {
+            Fixture(width, height, withTracks = true, initialTab = AppTab.My).use { ui ->
+                ui.clickLabel("Playlists")
+                assertEquals(AppTab.Playlists, ui.selectedTab)
+            }
+            Fixture(width, height, withTracks = true, initialTab = AppTab.My).use { ui ->
+                ui.clickLabel("Favorites")
+                assertEquals(AppTab.Favorites, ui.selectedTab)
+            }
+            Fixture(width, height, withTracks = true, initialTab = AppTab.My).use { ui ->
+                ui.clickLabel("Album")
+                assertEquals(AppTab.Library, ui.selectedTab)
+            }
         }
     }
 
@@ -254,8 +270,17 @@ class AutomotiveShellCompositionTest {
             assertEquals(true, selected.config[SemanticsProperties.Selected])
         }
 
-        fun clickLabel(label: String) {
-            val node = nodes().lastOrNull {
+        fun navigationLabel(tab: AppTab): String = when (tab) {
+            AppTab.My -> "My music"
+            AppTab.Library -> "Library"
+            AppTab.Settings -> "Settings"
+            AppTab.Favorites -> "Favorites"
+            AppTab.Playlists -> "Playlists"
+            AppTab.Tags -> "Music tags"
+            AppTab.Sources -> "Sources"
+        }
+
+        fun clickLabel(label: String) {            val node = nodes().lastOrNull {
                     (it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(label) == true ||
                         it.config.getOrNull(SemanticsProperties.Text)?.any { text -> text.text == label } == true)
             } ?: error("Missing navigation: $label")

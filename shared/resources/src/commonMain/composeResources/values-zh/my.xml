@@ -20,4 +20,8 @@
     <string name="recommendations_empty_hint">曲库有歌曲后会生成今日推荐。</string>
     <string name="recent_view_all_action">查看全部 &gt;</string>
     <string name="my_exit_app_action">退出应用</string>
+    <string name="my_entry_playlists_hint">管理与播放自建歌单</string>
+    <string name="my_entry_favorites_hint">查看喜欢的歌曲与专辑</string>
+    <string name="my_entry_albums_hint">按专辑浏览曲库</string>
+    <string name="my_entry_artists_hint">按艺人浏览曲库</string>
 </resources>

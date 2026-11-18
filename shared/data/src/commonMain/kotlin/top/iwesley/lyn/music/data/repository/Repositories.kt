@@ -615,7 +615,8 @@ interface SettingsRepository {
     val carUiScale: StateFlow<Float>
     val carFontScale: StateFlow<Float>
     val carCoverScale: StateFlow<Float>
-    val carContentMargin: StateFlow<Float>
+    val carContentMarginTop: StateFlow<Float>
+    val carContentMarginBottom: StateFlow<Float>
     val carImmersiveMode: StateFlow<Boolean>
     val navidromeWifiAudioQuality: StateFlow<NavidromeAudioQuality>
     val navidromeMobileAudioQuality: StateFlow<NavidromeAudioQuality>
@@ -643,7 +644,8 @@ interface SettingsRepository {
     suspend fun setCarUiScale(scale: Float)
     suspend fun setCarFontScale(scale: Float)
     suspend fun setCarCoverScale(scale: Float)
-    suspend fun setCarContentMargin(margin: Float)
+    suspend fun setCarContentMarginTop(margin: Float)
+    suspend fun setCarContentMarginBottom(margin: Float)
     suspend fun setCarImmersiveMode(enabled: Boolean)
     suspend fun setNavidromeWifiAudioQuality(quality: NavidromeAudioQuality)
     suspend fun setNavidromeMobileAudioQuality(quality: NavidromeAudioQuality)
@@ -2957,8 +2959,10 @@ class DefaultSettingsRepository(
         carDisplayPreferencesStore.carFontScale
     override val carCoverScale: StateFlow<Float> =
         carDisplayPreferencesStore.carCoverScale
-    override val carContentMargin: StateFlow<Float> =
-        carDisplayPreferencesStore.carContentMargin
+    override val carContentMarginTop: StateFlow<Float> =
+        carDisplayPreferencesStore.carContentMarginTop
+    override val carContentMarginBottom: StateFlow<Float> =
+        carDisplayPreferencesStore.carContentMarginBottom
     override val carImmersiveMode: StateFlow<Boolean> =
         carDisplayPreferencesStore.carImmersiveMode
     override val navidromeWifiAudioQuality: StateFlow<NavidromeAudioQuality> =
@@ -3053,8 +3057,12 @@ class DefaultSettingsRepository(
         carDisplayPreferencesStore.setCarCoverScale(scale)
     }
 
-    override suspend fun setCarContentMargin(margin: Float) {
-        carDisplayPreferencesStore.setCarContentMargin(margin)
+    override suspend fun setCarContentMarginTop(margin: Float) {
+        carDisplayPreferencesStore.setCarContentMarginTop(margin)
+    }
+
+    override suspend fun setCarContentMarginBottom(margin: Float) {
+        carDisplayPreferencesStore.setCarContentMarginBottom(margin)
     }
 
     override suspend fun setCarImmersiveMode(enabled: Boolean) {
@@ -5198,7 +5206,7 @@ fun sanitizeLrclibQueryTemplate(template: String): String {
 private const val LRCLIB_BASE_URL = "https://lrclib.net/"
 private const val LRCLIB_SEARCH_URL = "${LRCLIB_BASE_URL}api/search"
 private const val LRCLIB_DEFAULT_QUERY_TEMPLATE = "track_name={title}&artist_name={artist}"
-private const val LRCLIB_SOURCE_ID = "lrclib"
+const val LRCLIB_SOURCE_ID = "lrclib"
 private const val LRCLIB_SOURCE_NAME = "LRCLIB"
 private val LEGACY_BUILT_IN_LRCLIB_SOURCE_IDS = setOf("lrclib-synced", "lrclib-plain")
 const val LRCLIB_JSON_MAP_EXTRACTOR = "json-map:lyrics=syncedLyrics|plainLyrics,title=trackName,artist=artistName,album=albumName,durationSeconds=duration,id=id"

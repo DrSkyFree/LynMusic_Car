@@ -53,17 +53,17 @@ class AutomotiveNavigationRailTest {
         Fixture().use { ui ->
             assertEquals(96f, ui.railWidth)
             assertEquals(WideNavigationRailValue.Collapsed, ui.state.currentValue)
-            ui.click("automotive-navigation-Playlists")
+            ui.click("automotive-navigation-Settings")
             repeat(3) {
                 ui.toggle()
                 assertTrue(ui.railWidth in 220f..360f)
-                assertEquals(AppTab.Playlists, ui.selectedTab)
+                assertEquals(AppTab.Settings, ui.selectedTab)
                 ui.resize(480, 900)
                 ui.resize(1280, 800)
                 assertEquals(WideNavigationRailValue.Expanded, ui.state.currentValue)
                 ui.toggle()
                 assertEquals(96f, ui.railWidth)
-                assertEquals(AppTab.Playlists, ui.selectedTab)
+                assertEquals(AppTab.Settings, ui.selectedTab)
             }
         }
     }
@@ -98,7 +98,10 @@ class AutomotiveNavigationRailTest {
             Fixture(width = 800, height = 360, fontScale = 1.5f).use { ui ->
                 if (expanded) ui.toggle()
                 val scroll = ui.node("automotive-navigation-scroll")
-                assertTrue(scroll.config[SemanticsProperties.VerticalScrollAxisRange].maxValue() > 0f)
+                // The converged 我的/曲库/设置 rail fits a short landscape screen without scrolling.
+                // When it ever grows past the viewport the rail must still scroll rather than clip.
+                val scrollable = scroll.config[SemanticsProperties.VerticalScrollAxisRange].maxValue() > 0f
+                assertTrue(scrollable || automotiveLandscapeNavigationTabs.size <= 3)
                 for (tab in automotiveLandscapeNavigationTabs) {
                     ui.scrollTo(tab)
                     ui.assertTouchTarget("automotive-navigation-${tab.name}")

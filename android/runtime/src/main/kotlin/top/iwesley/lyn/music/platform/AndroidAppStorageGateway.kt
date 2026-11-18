@@ -36,14 +36,6 @@ private class AndroidAppStorageGateway(
                     category = AppStorageCategory.OfflineDownloads,
                     sizeBytes = directorySizeBytes(File(context.filesDir, "offline")),
                 ),
-                AppStorageCategoryUsage(
-                    category = AppStorageCategory.LyricsShareTemp,
-                    sizeBytes = directorySizeBytes(File(context.cacheDir, "lyrics-share")),
-                ),
-                AppStorageCategoryUsage(
-                    category = AppStorageCategory.TagEditTemp,
-                    sizeBytes = directorySizeBytes(File(context.cacheDir, "tag-edit")),
-                ),
             )
             AppStorageSnapshot(
                 totalSizeBytes = categories.sumOf { it.sizeBytes },
@@ -77,20 +69,6 @@ private class AndroidAppStorageGateway(
                     clearDirectory(directory)
                     directory.mkdirs()
                     database.offlineDownloadDao().deleteAll()
-                    Unit
-                }
-
-                AppStorageCategory.LyricsShareTemp -> {
-                    val directory = File(context.cacheDir, "lyrics-share")
-                    clearDirectory(directory)
-                    directory.mkdirs()
-                    Unit
-                }
-
-                AppStorageCategory.TagEditTemp -> {
-                    val directory = File(context.cacheDir, "tag-edit")
-                    clearDirectory(directory)
-                    directory.mkdirs()
                     Unit
                 }
             }

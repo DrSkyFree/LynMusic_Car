@@ -20,4 +20,8 @@
     <string name="recommendations_empty_hint">Today's recommendations will appear once the library has songs.</string>
     <string name="recent_view_all_action">View all &gt;</string>
     <string name="my_exit_app_action">Exit app</string>
+    <string name="my_entry_playlists_hint">Manage and play your own playlists</string>
+    <string name="my_entry_favorites_hint">Browse liked songs and albums</string>
+    <string name="my_entry_albums_hint">Browse the library by album</string>
+    <string name="my_entry_artists_hint">Browse the library by artist</string>
 </resources>

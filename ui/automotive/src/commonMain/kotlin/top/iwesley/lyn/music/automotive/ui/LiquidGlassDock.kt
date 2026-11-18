@@ -34,12 +34,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,6 +52,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
@@ -105,12 +100,17 @@ internal fun dockGlassLevel(): DockGlassLevel = when {
 internal fun LiquidGlassDock(
     selectedIndex: Int,
     backdrop: Backdrop,
+    icons: List<ImageVector>,
+    labels: List<String>,
     showUpdateBadge: Boolean,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    badgeIndex: Int = -1,
     level: DockGlassLevel = dockGlassLevel(),
 ) {
+    val itemCount = icons.size.coerceAtLeast(1)
+    val lastIndex = itemCount - 1
     val colors = MaterialTheme.colorScheme
     val light = colors.surface.luminance() > 0.5f
     val surface = colors.surface.copy(alpha = if (level == DockGlassLevel.Translucent) 0.94f else 0.4f)
@@ -145,12 +145,12 @@ internal fun LiquidGlassDock(
     // No fixed height: the item row (icon + label lines) drives the Dock height so enlarged
     // font sizes (up to 200%) stay fully visible with up to 2 label lines.
     BoxWithConstraints(modifier.selectableGroup()) {
-        val tabWidth = (maxWidth - 8.dp) / 4
+        val tabWidth = (maxWidth - 8.dp) / itemCount
         val insetPx = with(density) { 4.dp.toPx() }
-        val tabWidthPx = (constraints.maxWidth - 2f * insetPx).coerceAtLeast(1f) / 4f
+        val tabWidthPx = (constraints.maxWidth - 2f * insetPx).coerceAtLeast(1f) / itemCount.toFloat()
         fun indexAt(x: Float): Float {
-            val physical = ((x - insetPx) / tabWidthPx - 0.5f).coerceIn(0f, 3f)
-            return if (isLtr) physical else 3f - physical
+            val physical = ((x - insetPx) / tabWidthPx - 0.5f).coerceIn(0f, lastIndex.toFloat())
+            return if (isLtr) physical else lastIndex - physical
         }
         // Resizing, disabling or external navigation cancels any in-flight drag.
         DisposableEffect(constraints.maxWidth, density.density, direction, selectedIndex, enabled) {
@@ -163,7 +163,7 @@ internal fun LiquidGlassDock(
                     dragging = true
                 },
                 onDragEnd = {
-                    val target = dragIndex.roundToInt().coerceIn(0, 3)
+                    val target = dragIndex.roundToInt().coerceIn(0, lastIndex)
                     dragging = false
                     stretch = 0f
                     select(target)
@@ -233,13 +233,6 @@ internal fun LiquidGlassDock(
                         .width(tabWidth).fillMaxHeight().then(selection),
                 )
             }
-            val icons = listOf(
-                Icons.Rounded.LibraryMusic,
-                if (selectedIndex == 1) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                Icons.Rounded.Person,
-                Icons.Rounded.MoreHoriz,
-            )
-            val labels = listOf(uiString(Res.string.library_title), uiString(Res.string.favorites_collection_title), uiString(Res.string.navigation_my_music), uiString(Res.string.common_more))
             // Sizing child: its content height (icon + label lines) determines the Dock height.
             Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 icons.forEachIndexed { index, icon ->
@@ -268,7 +261,7 @@ internal fun LiquidGlassDock(
                                 BadgedIcon(
                                     imageVector = icon,
                                     contentDescription = labels[index],
-                                    showBadge = index == 3 && showUpdateBadge,
+                                    showBadge = index == badgeIndex && showUpdateBadge,
                                     modifier = Modifier.size(28.dp).graphicsLayer {
                                         scaleX = 1f + 0.2f * pressProgress
                                         scaleY = scaleX

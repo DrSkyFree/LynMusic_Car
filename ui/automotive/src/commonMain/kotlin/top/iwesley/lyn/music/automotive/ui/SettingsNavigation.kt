@@ -7,9 +7,9 @@ import top.iwesley.lyn.music.core.model.PlatformDescriptor
 internal enum class SettingsSection {
     General,
     Theme,
+    Library,
     Lyrics,
     Storage,
-    AboutDevice,
     AboutApp,
     Help,
 }

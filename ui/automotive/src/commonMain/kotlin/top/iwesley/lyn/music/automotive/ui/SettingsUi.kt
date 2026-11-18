@@ -117,6 +117,8 @@ import top.iwesley.lyn.music.core.model.presetThemeTokens
 import top.iwesley.lyn.music.core.model.resolveAppThemeTextPalette
 import top.iwesley.lyn.music.feature.settings.CustomThemeColorRole
 import top.iwesley.lyn.music.feature.settings.AppUpdateUiStatus
+import top.iwesley.lyn.music.feature.importing.ImportIntent
+import top.iwesley.lyn.music.feature.importing.ImportState
 import top.iwesley.lyn.music.feature.settings.SettingsIntent
 import top.iwesley.lyn.music.feature.settings.SettingsState
 import top.iwesley.lyn.music.feature.settings.toAppUpdateUiModel
@@ -131,6 +133,8 @@ internal fun SettingsTab(
     state: SettingsState,
     onSettingsIntent: (SettingsIntent) -> Unit,
     onOpenBackgroundRunSettings: () -> Unit,
+    importState: ImportState,
+    onImportIntent: (ImportIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val shellColors = mainShellColors
@@ -328,9 +332,12 @@ internal fun SettingsTab(
                                 .fillMaxHeight(),
                         )
 
-                        SettingsSection.AboutDevice -> AboutDeviceSettingsPane(
+                        SettingsSection.Library -> LibrarySettingsPane(
+                            platform = platform,
                             state = state,
                             onSettingsIntent = onSettingsIntent,
+                            importState = importState,
+                            onImportIntent = onImportIntent,
                             showHeading = true,
                             modifier = Modifier
                                 .weight(1f)
@@ -421,9 +428,12 @@ internal fun SettingsTab(
                                     modifier = detailModifier,
                                 )
 
-                                SettingsSection.AboutDevice -> AboutDeviceSettingsPane(
+                                SettingsSection.Library -> LibrarySettingsPane(
+                                    platform = platform,
                                     state = state,
                                     onSettingsIntent = onSettingsIntent,
+                                    importState = importState,
+                                    onImportIntent = onImportIntent,
                                     showHeading = false,
                                     modifier = detailModifier,
                                 )
@@ -997,18 +1007,6 @@ private fun GeneralSettingsPane(
                 }
             }
         }
-        CarDisplayDeviceSettingsCard(
-            state = state,
-            onSettingsIntent = onSettingsIntent,
-        )
-        CarDisplayScalingSettingsCard(
-            state = state,
-            onSettingsIntent = onSettingsIntent,
-        )
-        LibraryScanSettingsCard(
-            state = state,
-            onSettingsIntent = onSettingsIntent,
-        )
     }
 }
 
@@ -1125,11 +1123,18 @@ private fun CarDisplayScalingSettingsCard(
                 onFinished = { onSettingsIntent(SettingsIntent.CarCoverScaleChanged(it)) },
             )
             CarDisplayScaleRow(
-                label = uiString(Res.string.car_display_margin),
-                value = state.carContentMargin,
+                label = uiString(Res.string.car_display_margin_top),
+                value = state.carContentMarginTop,
                 range = CAR_CONTENT_MARGIN_MIN..CAR_CONTENT_MARGIN_MAX,
                 enabled = !state.carImmersiveMode,
-                onFinished = { onSettingsIntent(SettingsIntent.CarContentMarginChanged(it)) },
+                onFinished = { onSettingsIntent(SettingsIntent.CarContentMarginTopChanged(it)) },
+            )
+            CarDisplayScaleRow(
+                label = uiString(Res.string.car_display_margin_bottom),
+                value = state.carContentMarginBottom,
+                range = CAR_CONTENT_MARGIN_MIN..CAR_CONTENT_MARGIN_MAX,
+                enabled = !state.carImmersiveMode,
+                onFinished = { onSettingsIntent(SettingsIntent.CarContentMarginBottomChanged(it)) },
             )
         }
     }
@@ -1336,8 +1341,8 @@ private fun ThemeSettingsPane(
     ) {
         if (showHeading) {
             SectionTitle(
-                title = uiString(Res.string.theme_settings_title),
-                subtitle = uiString(Res.string.theme_settings_description),
+                title = uiString(Res.string.theme_scaling_settings_title),
+                subtitle = uiString(Res.string.theme_scaling_settings_description),
             )
         }
         MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
@@ -1415,6 +1420,52 @@ private fun ThemeSettingsPane(
                 }
             }
         }
+        CarDisplayDeviceSettingsCard(
+            state = state,
+            onSettingsIntent = onSettingsIntent,
+        )
+        CarDisplayScalingSettingsCard(
+            state = state,
+            onSettingsIntent = onSettingsIntent,
+        )
+    }
+}
+
+@Composable
+private fun LibrarySettingsPane(
+    platform: PlatformDescriptor,
+    state: SettingsState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+    importState: ImportState,
+    onImportIntent: (ImportIntent) -> Unit,
+    showHeading: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        if (showHeading) {
+            SectionTitle(
+                title = uiString(Res.string.library_management_title),
+                subtitle = uiString(Res.string.library_management_description),
+            )
+        }
+        LibraryScanSettingsCard(
+            state = state,
+            onSettingsIntent = onSettingsIntent,
+        )
+        // Sources keep their own scrolling list, so they own the remaining height instead of
+        // nesting a second vertical scroller inside this column.
+        SourcesTab(
+            platform = platform,
+            state = importState,
+            onImportIntent = onImportIntent,
+            compact = true,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -1443,9 +1494,37 @@ private fun LyricsSettingsPane(
     ) {
         if (showHeading) {
             SectionTitle(
-                title = uiString(Res.string.settings_lyrics_title),
-                subtitle = uiString(Res.string.lyrics_sources_settings_summary),
+                title = uiString(Res.string.lyrics_and_cover_settings_title),
+                subtitle = uiString(Res.string.lyrics_and_cover_settings_summary),
             )
+        }
+        MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                LyricsOnlineSourceToggleRow(
+                    title = uiString(Res.string.lyrics_fetch_enabled_title),
+                    hint = uiString(Res.string.lyrics_fetch_enabled_hint),
+                    checked = state.lyricsFetchEnabled,
+                    onCheckedChange = {
+                        onSettingsIntent(SettingsIntent.LyricsFetchEnabledChanged(it))
+                    },
+                )
+                LyricsOnlineSourceToggleRow(
+                    title = uiString(Res.string.cover_fetch_enabled_title),
+                    hint = uiString(Res.string.cover_fetch_enabled_hint),
+                    checked = state.coverFetchEnabled,
+                    onCheckedChange = {
+                        onSettingsIntent(SettingsIntent.CoverFetchEnabledChanged(it))
+                    },
+                )
+                Text(
+                    text = uiString(Res.string.lyrics_and_cover_source_notice),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = shellColors.secondaryText,
+                )
+            }
         }
         if (state.supportsLyricsShareFontImport) {
             LyricsShareFontImportCard(
@@ -1453,284 +1532,45 @@ private fun LyricsSettingsPane(
                 onSettingsIntent = onSettingsIntent,
             )
         }
-        MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("LrcAPI", fontWeight = FontWeight.Bold)
-                Text(
-                    uiString(Res.string.lyrics_lrcapi_reserved_source_hint),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        if (state.hasLrcApiSource) uiString(Res.string.workflow_saved_to_sources) else uiString(Res.string.common_not_configured),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    if (state.hasLrcApiSource) {
-                        MainShellAssistChip(
-                            onClick = {},
-                            label = { Text(uiString(Res.string.settings_direct_source)) },
-                            leadingIcon = { Icon(Icons.Rounded.CloudSync, null) },
-                        )
-                    }
-                }
-                ImeAwareOutlinedTextField(
-                    value = state.lrcApiUrl,
-                    onValueChange = { onSettingsIntent(SettingsIntent.LrcApiUrlChanged(it)) },
-                    label = { Text(uiString(Res.string.lyrics_lrcapi_request_url)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    singleLine = true,
-                    colors = settingsFieldColors,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { onSettingsIntent(SettingsIntent.SaveLrcApi) }) {
-                        Text(uiString(Res.string.lyrics_lrcapi_save_action))
-                    }
-                    OutlinedButton(
-                        onClick = { onSettingsIntent(SettingsIntent.ClearLrcApi) },
-                        enabled = state.hasLrcApiSource,
-                    ) {
-                        Text(uiString(Res.string.lyrics_lrcapi_clear_action))
-                    }
-                }
-            }
-        }
-        MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("Musicmatch", fontWeight = FontWeight.Bold)
-                Text(
-                    uiString(Res.string.lyrics_musicmatch_reserved_source_hint),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        if (state.hasMusicmatchSource) uiString(Res.string.workflow_saved_to_sources) else uiString(Res.string.common_not_configured),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    if (state.hasMusicmatchSource) {
-                        MainShellAssistChip(
-                            onClick = {},
-                            label = { Text(uiString(Res.string.settings_workflow_source)) },
-                            leadingIcon = { Icon(Icons.Rounded.GraphicEq, null) },
-                        )
-                    }
-                }
-                ImeAwareOutlinedTextField(
-                    value = state.musicmatchUserToken,
-                    onValueChange = { onSettingsIntent(SettingsIntent.MusicmatchUserTokenChanged(it)) },
-                    label = { Text(uiString(Res.string.settings_usertoken)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    singleLine = true,
-                    colors = settingsFieldColors,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { onSettingsIntent(SettingsIntent.SaveMusicmatch) }) {
-                        Text(uiString(Res.string.lyrics_musicmatch_save_action))
-                    }
-                    if (state.hasMusicmatchSource || state.musicmatchUserToken.isNotBlank()) {
-                        OutlinedButton(onClick = { onSettingsIntent(SettingsIntent.ClearMusicmatch) }) {
-                            Text(uiString(Res.string.lyrics_musicmatch_clear_action))
-                        }
-                    }
-                }
-            }
-        }
-        MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                ImeAwareOutlinedTextField(
-                    value = state.name,
-                    onValueChange = { onSettingsIntent(SettingsIntent.NameChanged(it)) },
-                    label = { Text(uiString(Res.string.lyrics_source_name_label)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = settingsFieldColors,
-                )
-                ImeAwareOutlinedTextField(
-                    value = state.urlTemplate,
-                    onValueChange = { onSettingsIntent(SettingsIntent.UrlChanged(it)) },
-                    label = { Text(uiString(Res.string.lyrics_source_url_template)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = settingsFieldColors,
-                )
-                ImeAwareOutlinedTextField(
-                    value = state.queryTemplate,
-                    onValueChange = { onSettingsIntent(SettingsIntent.QueryChanged(it)) },
-                    label = { Text(uiString(Res.string.lyrics_source_query_template)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = settingsFieldColors,
-                )
-                ImeAwareOutlinedTextField(
-                    value = state.headersTemplate,
-                    onValueChange = { onSettingsIntent(SettingsIntent.HeadersChanged(it)) },
-                    label = { Text(uiString(Res.string.lyrics_source_headers_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = settingsFieldColors,
-                )
-                ImeAwareOutlinedTextField(
-                    value = state.extractor,
-                    onValueChange = { onSettingsIntent(SettingsIntent.ExtractorChanged(it)) },
-                    label = { Text(uiString(Res.string.lyrics_source_extraction_rules)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = settingsFieldColors,
-                )
-                ImeAwareOutlinedTextField(
-                    value = state.priority,
-                    onValueChange = { onSettingsIntent(SettingsIntent.PriorityChanged(it)) },
-                    label = { Text(uiString(Res.string.lyrics_source_priority_label)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = settingsFieldColors,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(uiString(Res.string.lyrics_source_enable_label), fontWeight = FontWeight.Medium)
-                    Switch(
-                        checked = state.enabled,
-                        onCheckedChange = { onSettingsIntent(SettingsIntent.EnabledChanged(it)) },
-                        colors = SwitchDefaults.colors(
-                            uncheckedThumbColor = MaterialTheme.colorScheme.background,
-                            uncheckedBorderColor = shellColors.cardBorder,
-                        ),
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { onSettingsIntent(if (state.editingId != null) SettingsIntent.Save else SettingsIntent.CreateNew) }) {
-                        Text(if (state.editingId != null) uiString(Res.string.common_save) else uiString(Res.string.lyrics_source_new_action))
-                    }
-                    OutlinedButton(onClick = {
-                        onSettingsIntent(
-                            if (state.editingId != null) SettingsIntent.CreateNew else SettingsIntent.SelectConfig(
-                                null
-                            )
-                        )
-                    }) {
-                        Text(if (state.editingId != null) uiString(Res.string.lyrics_source_new_action) else uiString(Res.string.common_clear))
-                    }
-                    if (state.editingId != null) {
-                        TextButton(
-                            onClick = onRequestDeleteEditingSource,
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        ) {
-                            Text(uiString(Res.string.common_delete))
-                        }
-                    }
-                }
-            }
-        }
-        MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(uiString(Res.string.settings_workflow_json), fontWeight = FontWeight.Bold)
-                Text(
-                    uiString(Res.string.workflow_editor_description),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                ImeAwareOutlinedTextField(
-                    value = state.workflowJsonInput,
-                    onValueChange = { onSettingsIntent(SettingsIntent.WorkflowJsonChanged(it)) },
-                    label = { Text(uiString(Res.string.settings_workflow_json)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 180.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    minLines = 10,
-                    maxLines = 18,
-                    colors = settingsFieldColors,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { onSettingsIntent(if (state.editingWorkflowId != null) SettingsIntent.ImportWorkflow else SettingsIntent.CreateNewWorkflow) }) {
-                        Text(if (state.editingWorkflowId != null) uiString(Res.string.workflow_save_action) else uiString(Res.string.workflow_new_action))
-                    }
-                    if (state.editingWorkflowId != null || state.workflowJsonInput.isNotBlank()) {
-                        OutlinedButton(onClick = {
-                            onSettingsIntent(
-                                if (state.editingWorkflowId != null) SettingsIntent.CreateNewWorkflow else SettingsIntent.ViewWorkflow(
-                                    null
-                                )
-                            )
-                        }) {
-                            Text(if (state.editingWorkflowId != null) uiString(Res.string.workflow_new_action) else uiString(Res.string.lyrics_source_clear_editor))
-                        }
-                    }
-                }
-            }
-        }
+    }
+}
 
-        SectionTitle(
-            title = uiString(Res.string.lyrics_source_existing_configurations),
-            subtitle = uiString(Res.string.lyrics_source_kinds_description)
-        )
-        if (state.sources.isEmpty()) {
-            EmptyStateCard(
-                title = uiString(Res.string.lyrics_sources_empty_title),
-                body = uiString(Res.string.lyrics_source_priority_hint),
+@Composable
+private fun LyricsOnlineSourceToggleRow(
+    title: String,
+    hint: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val shellColors = mainShellColors
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
             )
-        } else {
-            state.sources.forEach { source ->
-                LyricsSourceCard(
-                    source = source,
-                    onClick = {
-                        when (source) {
-                            is LyricsSourceConfig -> {
-                                if (top.iwesley.lyn.music.domain.isManagedLrcApiSource(source)) {
-                                    onSettingsIntent(SettingsIntent.SelectLrcApi(source))
-                                } else {
-                                    onSettingsIntent(SettingsIntent.SelectConfig(source))
-                                }
-                            }
-
-                            is top.iwesley.lyn.music.core.model.WorkflowLyricsSourceConfig -> {
-                                if (top.iwesley.lyn.music.domain.isManagedMusicmatchSource(source)) {
-                                    onSettingsIntent(SettingsIntent.SelectMusicmatch(source))
-                                } else {
-                                    onSettingsIntent(SettingsIntent.ViewWorkflow(source))
-                                }
-                            }
-                        }
-                    },
-                    onToggleEnabled = {
-                        onSettingsIntent(
-                            SettingsIntent.ToggleSourceEnabled(
-                                source.id,
-                                !source.enabled
-                            )
-                        )
-                    },
-                    onDelete = {
-                        onRequestDeleteListedSource(source.id, source.name)
-                    },
-                )
-            }
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = shellColors.secondaryText,
+            )
         }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                uncheckedThumbColor = MaterialTheme.colorScheme.background,
+                uncheckedBorderColor = shellColors.cardBorder,
+            ),
+        )
     }
 }
 
@@ -1924,10 +1764,10 @@ private fun LyricsShareImportedFontName(
 private fun settingsSectionTitle(section: SettingsSection): String {
     return when (section) {
         SettingsSection.General -> uiString(Res.string.settings_general_title)
-        SettingsSection.Theme -> uiString(Res.string.theme_settings_title)
-        SettingsSection.Lyrics -> uiString(Res.string.settings_lyrics_title)
+        SettingsSection.Theme -> uiString(Res.string.theme_scaling_settings_title)
+        SettingsSection.Library -> uiString(Res.string.library_management_title)
+        SettingsSection.Lyrics -> uiString(Res.string.lyrics_and_cover_settings_title)
         SettingsSection.Storage -> uiString(Res.string.settings_storage_management_title)
-        SettingsSection.AboutDevice -> uiString(Res.string.about_device_title)
         SettingsSection.AboutApp -> uiString(Res.string.about_app_title)
         SettingsSection.Help -> uiString(Res.string.settings_help_title)
     }
@@ -1937,10 +1777,10 @@ private fun settingsSectionTitle(section: SettingsSection): String {
 private fun settingsSectionSubtitle(section: SettingsSection): String {
     return when (section) {
         SettingsSection.General -> uiString(Res.string.settings_general_description)
-        SettingsSection.Theme -> uiString(Res.string.theme_settings_summary)
-        SettingsSection.Lyrics -> uiString(Res.string.lyrics_sources_settings_description)
+        SettingsSection.Theme -> uiString(Res.string.theme_scaling_settings_summary)
+        SettingsSection.Library -> uiString(Res.string.library_management_summary)
+        SettingsSection.Lyrics -> uiString(Res.string.lyrics_and_cover_settings_summary)
         SettingsSection.Storage -> uiString(Res.string.storage_cleanup_summary)
-        SettingsSection.AboutDevice -> uiString(Res.string.device_info_summary)
         SettingsSection.AboutApp -> uiString(Res.string.about_app_information_hint)
         SettingsSection.Help -> uiString(Res.string.settings_help_description)
     }
@@ -1950,174 +1790,11 @@ private fun settingsSectionIcon(section: SettingsSection): ImageVector {
     return when (section) {
         SettingsSection.General -> Icons.Rounded.Tune
         SettingsSection.Theme -> Icons.Rounded.Settings
+        SettingsSection.Library -> Icons.Rounded.LibraryMusic
         SettingsSection.Lyrics -> Icons.Rounded.GraphicEq
         SettingsSection.Storage -> Icons.Rounded.Storage
-        SettingsSection.AboutDevice -> Icons.Rounded.Info
-        SettingsSection.AboutApp -> Icons.Rounded.LibraryMusic
+        SettingsSection.AboutApp -> Icons.Rounded.Info
         SettingsSection.Help -> Icons.AutoMirrored.Rounded.HelpOutline
-    }
-}
-
-@Composable
-private fun AboutDeviceSettingsPane(
-    state: SettingsState,
-    onSettingsIntent: (SettingsIntent) -> Unit,
-    showHeading: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val shellColors = mainShellColors
-    val snapshot = state.deviceInfoSnapshot
-    val localDensity = LocalDensity.current
-    val showsAndroidDisplayMetrics =
-        currentPlatformDescriptor.capabilities.supportsAppDisplayScaleAdjustment
-    val summaryTitle = when {
-        snapshot?.deviceModel?.isNotBlank() == true -> snapshot.deviceModel
-        snapshot?.systemName?.isNotBlank() == true -> snapshot.systemName
-        state.deviceInfoLoading -> uiString(Res.string.device_info_loading_progress)
-        else -> uiString(Res.string.about_device_title)
-    }.orEmpty()
-    val summarySubtitle = snapshot?.let {
-        buildString {
-            append(it.systemName.ifBlank { uiString(Res.string.device_system_label) })
-            append(" · ")
-            append(it.systemVersion.ifBlank { uiString(Res.string.about_version_unavailable) })
-        }
-    } ?: if (state.deviceInfoLoading) {
-        uiString(Res.string.device_info_loading_description)
-    } else {
-        uiString(Res.string.device_info_summary)
-    }
-    LaunchedEffect(Unit) {
-        onSettingsIntent(SettingsIntent.LoadDeviceInfo())
-    }
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (showHeading) {
-            SectionTitle(
-                title = uiString(Res.string.about_device_title),
-                subtitle = uiString(Res.string.device_info_description),
-            )
-        }
-        MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            text = summaryTitle,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                        )
-                        Text(
-                            text = summarySubtitle,
-                            color = shellColors.secondaryText,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-        }
-        AboutDeviceInfoCard(title = uiString(Res.string.device_system_label)) {
-            AboutDeviceFieldRow(
-                label = uiString(Res.string.device_system_name),
-                value = deviceInfoDisplayValue(snapshot?.systemName, state.deviceInfoLoading),
-            )
-            AboutDeviceFieldRow(
-                label = uiString(Res.string.device_system_version),
-                value = deviceInfoDisplayValue(snapshot?.systemVersion, state.deviceInfoLoading),
-            )
-            snapshot?.deviceModel?.takeIf { it.isNotBlank() }?.let { model ->
-                AboutDeviceFieldRow(
-                    label = uiString(Res.string.device_model_label),
-                    value = model,
-                )
-            }
-        }
-        AboutDeviceInfoCard(title = uiString(Res.string.device_display_label)) {
-            AboutDeviceFieldRow(
-                label = uiString(Res.string.display_resolution_label),
-                value = deviceInfoDisplayValue(snapshot?.resolution, state.deviceInfoLoading),
-            )
-            if (showsAndroidDisplayMetrics) {
-                AboutDeviceFieldRow(
-                    label = uiString(Res.string.display_app_resolution_dp),
-                    value = deviceInfoDpResolutionValue(
-                        widthPx = snapshot?.resolutionWidthPx,
-                        heightPx = snapshot?.resolutionHeightPx,
-                        density = localDensity.density,
-                        loading = state.deviceInfoLoading,
-                    ),
-                )
-                AboutDeviceFieldRow(
-                    label = uiString(Res.string.display_system_resolution_dp),
-                    value = deviceInfoDpResolutionValue(
-                        widthPx = snapshot?.resolutionWidthPx,
-                        heightPx = snapshot?.resolutionHeightPx,
-                        density = snapshot?.systemDensityScale,
-                        loading = state.deviceInfoLoading,
-                    ),
-                )
-                AboutDeviceFieldRow(
-                    label = uiString(Res.string.display_app_density),
-                    value = deviceInfoDensityValue(
-                        density = localDensity.density,
-                        loading = false,
-                    ),
-                )
-                AboutDeviceFieldRow(
-                    label = uiString(Res.string.display_system_density),
-                    value = deviceInfoDensityValue(
-                        density = snapshot?.systemDensityScale,
-                        loading = state.deviceInfoLoading,
-                    ),
-                )
-            } else {
-                AboutDeviceFieldRow(
-                    label = uiString(Res.string.display_resolution_dp),
-                    value = deviceInfoDpResolutionValue(
-                        widthPx = snapshot?.resolutionWidthPx,
-                        heightPx = snapshot?.resolutionHeightPx,
-                        density = localDensity.density,
-                        loading = state.deviceInfoLoading,
-                    ),
-                )
-                AboutDeviceFieldRow(
-                    label = uiString(Res.string.display_density_label),
-                    value = deviceInfoDensityValue(
-                        density = localDensity.density,
-                        loading = false,
-                    ),
-                )
-            }
-            AboutDeviceFieldRow(
-                label = uiString(Res.string.display_font_scale),
-                value = deviceInfoFontScaleValue(localDensity.fontScale),
-            )
-        }
-        AboutDeviceInfoCard(title = uiString(Res.string.device_hardware_label)) {
-            AboutDeviceFieldRow(
-                label = "CPU",
-                value = deviceInfoDisplayValue(snapshot?.cpuDescriptionText?.displayText(), state.deviceInfoLoading),
-            )
-            AboutDeviceFieldRow(
-                label = uiString(Res.string.device_memory_label),
-                value = deviceInfoMemoryValue(snapshot?.totalMemoryBytes, state.deviceInfoLoading),
-            )
-        }
     }
 }
 
@@ -2316,8 +1993,6 @@ private fun StorageSettingsPane(
             AppStorageCategory.Artwork,
             AppStorageCategory.PlaybackCache,
             AppStorageCategory.OfflineDownloads,
-            AppStorageCategory.LyricsShareTemp,
-            AppStorageCategory.TagEditTemp,
         )
     }
     val categories = remember(state.storageSnapshot) {
@@ -2772,8 +2447,6 @@ private fun storageCategoryTitle(category: AppStorageCategory): String {
         AppStorageCategory.Artwork -> uiString(Res.string.storage_artwork_cache)
         AppStorageCategory.PlaybackCache -> uiString(Res.string.storage_playback_cache)
         AppStorageCategory.OfflineDownloads -> uiString(Res.string.storage_offline_music)
-        AppStorageCategory.LyricsShareTemp -> uiString(Res.string.storage_lyrics_share_temporary_files)
-        AppStorageCategory.TagEditTemp -> uiString(Res.string.storage_tags_temporary_files)
     }
 }
 
@@ -2783,8 +2456,6 @@ private fun storageCategoryDescription(category: AppStorageCategory): String {
         AppStorageCategory.Artwork -> uiString(Res.string.storage_artwork_cache_description)
         AppStorageCategory.PlaybackCache -> uiString(Res.string.storage_samba_cache_description)
         AppStorageCategory.OfflineDownloads -> uiString(Res.string.storage_offline_music_description)
-        AppStorageCategory.LyricsShareTemp -> uiString(Res.string.storage_lyrics_share_temporary_description)
-        AppStorageCategory.TagEditTemp -> uiString(Res.string.storage_tags_temporary_description)
     }
 }
 

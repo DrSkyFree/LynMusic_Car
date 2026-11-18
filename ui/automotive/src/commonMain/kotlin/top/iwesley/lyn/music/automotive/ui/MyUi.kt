@@ -29,9 +29,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.RecentActors
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,7 +60,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.time.Instant
 import top.iwesley.lyn.music.core.model.PlatformDescriptor
-import top.iwesley.lyn.music.core.model.RecentAlbum
 import top.iwesley.lyn.music.core.model.RecentTrack
 import top.iwesley.lyn.music.core.model.Track
 import top.iwesley.lyn.music.core.model.trackArtworkCacheKey
@@ -74,30 +78,18 @@ internal fun MyTab(
     onPlayerIntent: (PlayerIntent) -> Unit,
     onSettingsIntent: (SettingsIntent) -> Unit,
     onOpenAlbum: (String) -> Unit,
+    onOpenPlaylists: () -> Unit,
+    onOpenFavorites: () -> Unit,
+    onOpenLibraryRoot: (LibraryBrowserRootView) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isMobile = false
     var detailPage by rememberSaveable { mutableStateOf<MyDetailPage?>(null) }
     val mainListState = rememberLazyListState()
-    val dailyRecommendationCarouselState = rememberLazyListState()
     PlatformBackHandler(enabled = detailPage != null) {
         detailPage = null
     }
     when (detailPage) {
-        MyDetailPage.DailyRecommendation -> {
-            DailyRecommendationDetail(
-                tracks = state.dailyRecommendationTracks,
-                isLoading = state.isGeneratingDailyRecommendation,
-                showDuration = !isMobile,
-                onBack = { detailPage = null },
-                onPlayTrack = { index ->
-                    buildDailyRecommendationPlayIntent(state.dailyRecommendationTracks, index)?.let(onPlayerIntent)
-                },
-                modifier = modifier,
-            )
-            return
-        }
-
         MyDetailPage.RecentTracks -> {
             RecentTracksDetail(
                 recentTracks = state.recentTracks,
@@ -107,18 +99,6 @@ internal fun MyTab(
                 onPlayTrack = { index ->
                     buildRecentTracksPlayIntent(state.recentTracks, index)?.let(onPlayerIntent)
                 },
-                modifier = modifier,
-            )
-            return
-        }
-
-        MyDetailPage.RecentAlbums -> {
-            RecentAlbumsDetail(
-                recentAlbums = state.recentAlbums,
-                isLoading = state.isLoadingContent,
-                compact = isMobile,
-                onBack = { detailPage = null },
-                onOpenAlbum = onOpenAlbum,
                 modifier = modifier,
             )
             return
@@ -163,18 +143,35 @@ internal fun MyTab(
             }
         }
         item {
-            DailyRecommendationCard(
-                tracks = state.dailyRecommendationTracks,
-                isLoading = state.isGeneratingDailyRecommendation,
-                compact = isMobile,
-                carouselState = dailyRecommendationCarouselState,
-                onOpen = { detailPage = MyDetailPage.DailyRecommendation },
-                onPlayAll = {
-                    buildDailyRecommendationPlayIntent(state.dailyRecommendationTracks, 0)?.let(onPlayerIntent)
-                },
-                onPlayTrack = { index ->
-                    buildDailyRecommendationPlayIntent(state.dailyRecommendationTracks, index)?.let(onPlayerIntent)
-                },
+            MyEntryCard(
+                title = uiString(Res.string.playlists_title),
+                subtitle = uiString(Res.string.my_entry_playlists_hint),
+                icon = Icons.Rounded.QueueMusic,
+                onClick = onOpenPlaylists,
+            )
+        }
+        item {
+            MyEntryCard(
+                title = uiString(Res.string.favorites_likes_title),
+                subtitle = uiString(Res.string.my_entry_favorites_hint),
+                icon = Icons.Rounded.FavoriteBorder,
+                onClick = onOpenFavorites,
+            )
+        }
+        item {
+            MyEntryCard(
+                title = uiString(Res.string.library_albums_title),
+                subtitle = uiString(Res.string.my_entry_albums_hint),
+                icon = Icons.Rounded.Album,
+                onClick = { onOpenLibraryRoot(LibraryBrowserRootView.Albums) },
+            )
+        }
+        item {
+            MyEntryCard(
+                title = uiString(Res.string.library_artists_title),
+                subtitle = uiString(Res.string.my_entry_artists_hint),
+                icon = Icons.Rounded.RecentActors,
+                onClick = { onOpenLibraryRoot(LibraryBrowserRootView.Artists) },
             )
         }
         item {
@@ -189,334 +186,66 @@ internal fun MyTab(
                 onViewAll = { detailPage = MyDetailPage.RecentTracks },
             )
         }
-        item {
-            RecentAlbumsSection(
-                recentAlbums = state.recentAlbums,
-                isLoading = state.isLoadingContent,
-                isMobile = isMobile,
-                onOpenAlbum = onOpenAlbum,
-                onViewAll = { detailPage = MyDetailPage.RecentAlbums },
+    }
+}
+
+@Composable
+private fun MyEntryCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    val shellColors = mainShellColors
+    MainShellElevatedCard(shape = RoundedCornerShape(24.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = shellColors.secondaryText,
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = null,
+                tint = shellColors.secondaryText,
+                modifier = Modifier.size(20.dp),
             )
         }
     }
 }
 
 private enum class MyDetailPage {
-    DailyRecommendation,
     RecentTracks,
-    RecentAlbums,
 }
 
-@Composable
-private fun DailyRecommendationCard(
-    tracks: List<Track>,
-    isLoading: Boolean,
-    compact: Boolean,
-    carouselState: LazyListState,
-    onOpen: () -> Unit,
-    onPlayAll: () -> Unit,
-    onPlayTrack: (Int) -> Unit,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val titleColor = colorScheme.onSurface
-    val mutedColor = colorScheme.onSurfaceVariant
-    val accentColor = colorScheme.primary
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen),
-    ) {
-        Column(
-            modifier = Modifier.padding(if (compact) 16.dp else 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = uiString(Res.string.recommendations_daily_title),
-                    modifier = Modifier.weight(1f),
-                    color = titleColor,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = uiString(Res.string.recent_view_all_action),
-                    color = mutedColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            when {
-                isLoading -> RecentLoadingRow(text = uiString(Res.string.recommendations_generating_description))
-                tracks.isEmpty() -> InlineEmptyState(
-                    title = uiString(Res.string.recommendations_empty_title),
-                    body = uiString(Res.string.recommendations_empty_hint),
-                )
-                compact -> DailyRecommendationMobileCarousel(
-                    tracks = tracks,
-                    state = carouselState,
-                    accentColor = accentColor,
-                    onOpen = onOpen,
-                    onPlayTrack = onPlayTrack,
-                )
-                else -> DailyRecommendationPreview(
-                    tracks = tracks,
-                    compact = compact,
-                    titleColor = titleColor,
-                    mutedColor = mutedColor,
-                    accentColor = accentColor,
-                    onPlayAll = onPlayAll,
-                    onPlayTrack = onPlayTrack,
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun DailyRecommendationMobileCarousel(
-    tracks: List<Track>,
-    state: LazyListState,
-    accentColor: Color,
-    onOpen: () -> Unit,
-    onPlayTrack: (Int) -> Unit,
-) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val cardWidth = (maxWidth * 0.68f)
-            .coerceAtLeast(218.dp)
-            .coerceAtMost(300.dp)
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            state = state,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            itemsIndexed(
-                items = dailyRecommendationCarouselItems(tracks),
-                key = { _, track -> track.id },
-            ) { index, track ->
-                DailyRecommendationCarouselCard(
-                    track = track,
-                    modifier = Modifier
-                        .width(cardWidth)
-                        .height(156.dp),
-                    accentColor = accentColor,
-                    onOpen = onOpen,
-                    onPlay = { onPlayTrack(index) },
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun DailyRecommendationCarouselCard(
-    track: Track,
-    modifier: Modifier,
-    accentColor: Color,
-    onOpen: () -> Unit,
-    onPlay: () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(accentColor.copy(alpha = 0.18f))
-            .clickable(onClick = onOpen),
-    ) {
-        DailyRecommendationArtwork(
-            artworkLocator = track.artworkLocator,
-            artworkCacheKey = trackArtworkCacheKey(track),
-            modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(18.dp),
-            accentColor = accentColor,
-        )
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(Color.Black.copy(alpha = 0.28f)),
-        )
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 20.dp, end = 76.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = track.title,
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = track.artistName ?: uiString(Res.string.common_unknown_artist),
-                color = Color.White.copy(alpha = 0.82f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.92f))
-                .clickable(onClick = onPlay),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-    }
-}
 
-@Composable
-private fun DailyRecommendationPreview(
-    tracks: List<Track>,
-    compact: Boolean,
-    titleColor: Color,
-    mutedColor: Color,
-    accentColor: Color,
-    onPlayAll: () -> Unit,
-    onPlayTrack: (Int) -> Unit,
-) {
-    val heroSize = if (compact) 112.dp else 148.dp
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DailyRecommendationHeroArtwork(
-            artworkLocator = tracks.firstOrNull()?.artworkLocator,
-            artworkCacheKey = tracks.firstOrNull()?.let(::trackArtworkCacheKey),
-            modifier = Modifier.size(heroSize),
-            accentColor = accentColor,
-            onPlayAll = onPlayAll,
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
-        ) {
-            tracks.take(3).forEachIndexed { index, track ->
-                DailyRecommendationPreviewTrackRow(
-                    track = track,
-                    titleColor = titleColor,
-                    mutedColor = mutedColor,
-                    accentColor = accentColor,
-                    onPlay = { onPlayTrack(index) },
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun DailyRecommendationHeroArtwork(
-    artworkLocator: String?,
-    artworkCacheKey: String?,
-    modifier: Modifier,
-    accentColor: Color,
-    onPlayAll: () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-    ) {
-        DailyRecommendationArtwork(
-            artworkLocator = artworkLocator,
-            artworkCacheKey = artworkCacheKey,
-            modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(14.dp),
-            accentColor = accentColor,
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.92f))
-                .clickable(onClick = onPlayAll),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(24.dp),
-            )
-        }
-    }
-}
 
-@Composable
-private fun DailyRecommendationPreviewTrackRow(
-    track: Track,
-    titleColor: Color,
-    mutedColor: Color,
-    accentColor: Color,
-    onPlay: () -> Unit,
-) {
-    TrackActionContainer(
-        track = track,
-        onClick = onPlay,
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DailyRecommendationArtwork(
-            artworkLocator = track.artworkLocator,
-            artworkCacheKey = trackArtworkCacheKey(track),
-            modifier = Modifier.size(38.dp),
-            shape = RoundedCornerShape(9.dp),
-            accentColor = accentColor,
-        )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
-        ) {
-            Text(
-                text = track.title,
-                color = titleColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = track.artistName ?: uiString(Res.string.common_unknown_artist),
-                color = mutedColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .clickable(onClick = onPlay),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
-}
 
 @Composable
 private fun DailyRecommendationArtwork(
@@ -542,81 +271,6 @@ private fun DailyRecommendationArtwork(
     }
 }
 
-@Composable
-private fun DailyRecommendationDetail(
-    tracks: List<Track>,
-    isLoading: Boolean,
-    showDuration: Boolean,
-    onBack: () -> Unit,
-    onPlayTrack: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val indexColumnWidth = rememberListIndexColumnWidth(tracks.size)
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = dockContentPadding(PaddingValues(horizontal = 16.dp, vertical = 18.dp)),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                MyDetailBackButton(onBack = onBack)
-                Box(modifier = Modifier.weight(1f)) {
-                    SectionTitle(
-                        title = uiString(Res.string.recommendations_daily_title),
-                        subtitle = if (tracks.isEmpty()) uiString(Res.string.recommendations_today_playlist) else uiString(Res.plurals.common_track_count_short, (tracks.size).toInt(), tracks.size),
-                    )
-                }
-                OutlinedButton(
-                    onClick = { onPlayTrack(0) },
-                    enabled = tracks.isNotEmpty(),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = uiString(Res.string.player_play_all),
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-            }
-        }
-        if (isLoading || tracks.isEmpty()) {
-            item {
-                MainShellElevatedCard {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (isLoading) {
-                            RecentLoadingRow(text = uiString(Res.string.recommendations_generating_description))
-                        } else {
-                            InlineEmptyState(
-                                title = uiString(Res.string.recommendations_empty_title),
-                                body = uiString(Res.string.recommendations_empty_hint),
-                            )
-                        }
-                    }
-                }
-            }
-        } else {
-            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                DailyRecommendationTrackRow(
-                    track = track,
-                    index = index,
-                    indexColumnWidth = indexColumnWidth,
-                    showDuration = showDuration,
-                    onClick = { onPlayTrack(index) },
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun RecentTracksDetail(
@@ -664,47 +318,6 @@ private fun RecentTracksDetail(
     }
 }
 
-@Composable
-private fun RecentAlbumsDetail(
-    recentAlbums: List<RecentAlbum>,
-    isLoading: Boolean,
-    compact: Boolean,
-    onBack: () -> Unit,
-    onOpenAlbum: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = dockContentPadding(PaddingValues(
-            horizontal = if (compact) 16.dp else 32.dp,
-            vertical = if (compact) 18.dp else 28.dp,
-        )),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            MyDetailHeader(
-                title = uiString(Res.string.recent_albums_title),
-                subtitle = if (recentAlbums.isEmpty()) "" else uiString(Res.plurals.recent_album_count, (recentAlbums.size).toInt(), recentAlbums.size),
-                onBack = onBack,
-            )
-        }
-        when {
-            isLoading -> item { RecentLoadingRow() }
-            recentAlbums.isEmpty() -> item {
-                InlineEmptyState(
-                    title = uiString(Res.string.recent_albums_empty_title),
-                    body = uiString(Res.string.recent_albums_empty_hint),
-                )
-            }
-            else -> items(recentAlbums, key = { recentAlbum -> recentAlbum.album.id }) { recentAlbum ->
-                RecentAlbumRow(
-                    recentAlbum = recentAlbum,
-                    onClick = { onOpenAlbum(recentAlbum.album.id) },
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun MyDetailHeader(
@@ -868,44 +481,6 @@ private fun RecentTrackPreviewCard(
     }
 }
 
-@Composable
-private fun RecentAlbumsSection(
-    recentAlbums: List<RecentAlbum>,
-    isLoading: Boolean,
-    isMobile: Boolean,
-    onOpenAlbum: (String) -> Unit,
-    onViewAll: () -> Unit,
-) {
-    val previewAlbums = recentPreviewItems(recentAlbums, isMobile)
-    Column(
-        modifier = Modifier.padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        RecentSectionHeader(
-            title = uiString(Res.string.recent_albums_title),
-            subtitle = if (recentAlbums.isEmpty()) "" else uiString(Res.plurals.recent_album_count, (recentAlbums.size).toInt(), recentAlbums.size),
-            showViewAll = !isLoading && recentAlbums.isNotEmpty(),
-            onViewAll = onViewAll,
-        )
-        when {
-            isLoading -> RecentLoadingRow()
-            recentAlbums.isEmpty() -> InlineEmptyState(
-                title = uiString(Res.string.recent_albums_empty_title),
-                body = uiString(Res.string.recent_albums_empty_hint),
-            )
-            isMobile -> previewAlbums.forEach { recentAlbum ->
-                RecentAlbumRow(
-                    recentAlbum = recentAlbum,
-                    onClick = { onOpenAlbum(recentAlbum.album.id) },
-                )
-            }
-            else -> RecentAlbumPreviewRow(
-                recentAlbums = previewAlbums,
-                onOpenAlbum = onOpenAlbum,
-            )
-        }
-    }
-}
 
 @Composable
 private fun RecentSectionHeader(
@@ -1008,157 +583,9 @@ private fun RecentTrackRow(
     }
 }
 
-@Composable
-private fun DailyRecommendationTrackRow(
-    track: Track,
-    index: Int,
-    indexColumnWidth: Dp,
-    showDuration: Boolean,
-    onClick: () -> Unit,
-) {
-    val shellColors = mainShellColors
-    Column(modifier = Modifier.fillMaxWidth()) {
-        TrackActionContainer(
-            track = track,
-            onClick = onClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .padding(start = 0.dp, top = 12.dp, end = 14.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            ListIndexColumn(
-                index = index,
-                width = indexColumnWidth,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            TrackArtworkThumbnail(
-                artworkLocator = track.artworkLocator,
-                artworkCacheKey = trackArtworkCacheKey(track),
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = track.title,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = buildTrackMetadataSubtitle(track),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            if (showDuration) {
-                Text(
-                    text = formatDuration(track.durationMs),
-                    modifier = Modifier.width(56.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                )
-            }
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 88.dp)
-                .height(1.dp)
-                .background(shellColors.cardBorder),
-        )
-    }
-}
 
-@Composable
-private fun RecentAlbumRow(
-    recentAlbum: RecentAlbum,
-    onClick: () -> Unit,
-) {
-    val shellColors = mainShellColors
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            TrackArtworkThumbnail(artworkLocator = recentAlbum.artworkLocator)
-            RecentAlbumText(
-                recentAlbum = recentAlbum,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = uiString(Res.plurals.common_track_count_short, (recentAlbum.album.trackCount).toInt(), recentAlbum.album.trackCount),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 88.dp)
-                .height(1.dp)
-                .background(shellColors.cardBorder),
-        )
-    }
-}
 
-@Composable
-private fun RecentAlbumPreviewRow(
-    recentAlbums: List<RecentAlbum>,
-    onOpenAlbum: (String) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        recentAlbums.forEach { recentAlbum ->
-            RecentAlbumPreviewCard(
-                recentAlbum = recentAlbum,
-                modifier = Modifier.weight(1f),
-                onClick = { onOpenAlbum(recentAlbum.album.id) },
-            )
-        }
-        repeat((recentPreviewLimit(isMobile = false) - recentAlbums.size).coerceAtLeast(0)) {
-            Spacer(modifier = Modifier.weight(1f))
-        }
-    }
-}
 
-@Composable
-private fun RecentAlbumPreviewCard(
-    recentAlbum: RecentAlbum,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        DailyRecommendationArtwork(
-            artworkLocator = recentAlbum.artworkLocator,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp)),
-            shape = RoundedCornerShape(12.dp),
-            accentColor = MaterialTheme.colorScheme.primary,
-        )
-        RecentAlbumText(recentAlbum = recentAlbum)
-    }
-}
 
 internal fun recentPreviewLimit(isMobile: Boolean): Int {
     return if (isMobile) 3 else 6
@@ -1186,37 +613,6 @@ internal fun buildRecentTracksPlayIntent(
     )
 }
 
-@Composable
-private fun RecentAlbumText(
-    recentAlbum: RecentAlbum,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Text(
-            text = recentAlbum.album.title.ifBlank { uiString(Res.string.common_unknown_album) },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            text = recentAlbum.album.artistName ?: uiString(Res.string.common_unknown_artist),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            text = buildRecentAlbumSubtitle(recentAlbum),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-}
 
 @Composable
 private fun RecentLoadingRow(text: String = uiString(Res.string.recent_plays_loading)) {
@@ -1275,25 +671,11 @@ private fun buildTrackMetadataSubtitle(track: Track): String {
     return if (album == null) artist else "$artist · $album"
 }
 
-internal fun buildDailyRecommendationPlayIntent(
-    tracks: List<Track>,
-    startIndex: Int,
-): PlayerIntent.PlayTracks? {
-    if (tracks.isEmpty() || startIndex !in tracks.indices) return null
-    return PlayerIntent.PlayTracks(
-        tracks = tracks,
-        startIndex = startIndex,
-    )
-}
 
 internal fun dailyRecommendationCarouselItems(
     tracks: List<Track>,
 ): List<Track> = tracks.take(DAILY_RECOMMENDATION_CAROUSEL_LIMIT)
 
-@Composable
-private fun buildRecentAlbumSubtitle(recentAlbum: RecentAlbum): String {
-    return formatRecentStats(recentAlbum.playCount, recentAlbum.lastPlayedAt)
-}
 
 @Composable
 private fun formatRecentStats(

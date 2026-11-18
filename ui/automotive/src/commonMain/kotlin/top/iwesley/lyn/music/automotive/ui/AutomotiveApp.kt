@@ -456,7 +456,8 @@ fun AutomotiveApp(
                             component.offlineDownloadStore.dispatch(OfflineDownloadIntent.ClearMessage)
                         }
                     }
-                    val carContentMargin by component.carContentMargin.collectAsState()
+                    val carContentMarginTop by component.carContentMarginTop.collectAsState()
+                    val carContentMarginBottom by component.carContentMarginBottom.collectAsState()
                     val carCoverScale by component.carCoverScale.collectAsState()
                     val layoutProfile = AutomotiveLayoutProfile(maxWidth = maxWidth, maxHeight = maxHeight)
                     val compact = layoutProfile.isCompactLayout
@@ -504,7 +505,8 @@ fun AutomotiveApp(
                                 },
                                 mobilePortraitMiniPlayer = mobilePortraitMiniPlayer,
                                 hideMiniPlayerBar = false,
-                                carContentMargin = carContentMargin,
+                                carContentMarginTop = carContentMarginTop,
+                                carContentMarginBottom = carContentMarginBottom,
                                 carCoverScale = carCoverScale,
                                 onOpenAddToPlaylist = {
                                     openAddToPlaylist(effectivePlayerSnapshot.currentTrack)
@@ -543,7 +545,8 @@ fun AutomotiveApp(
                                 onOpenLibraryNavigationTarget = { target ->
                                     details.open(target)
                                 },
-                                carContentMargin = carContentMargin,
+                                carContentMarginTop = carContentMarginTop,
+                                carContentMarginBottom = carContentMarginBottom,
                                 carCoverScale = carCoverScale,
                                 onOpenAddToPlaylist = {
                                     openAddToPlaylist(effectivePlayerSnapshot.currentTrack)

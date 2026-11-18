@@ -137,7 +137,8 @@ val DEFAULT_CAR_DISPLAY_MODE: CarDisplayMode = CarDisplayMode.FOLLOW_WINDOW
 const val DEFAULT_CAR_UI_SCALE = 1.0f
 const val DEFAULT_CAR_FONT_SCALE = 1.0f
 const val DEFAULT_CAR_COVER_SCALE = 1.0f
-const val DEFAULT_CAR_CONTENT_MARGIN = 0.0f
+const val DEFAULT_CAR_CONTENT_MARGIN_TOP = 0.0f
+const val DEFAULT_CAR_CONTENT_MARGIN_BOTTOM = 0.0f
 const val DEFAULT_CAR_IMMERSIVE_MODE = false
 
 const val CAR_UI_SCALE_MIN = 0.7f
@@ -163,14 +164,16 @@ interface CarDisplayPreferencesStore {
     val carUiScale: StateFlow<Float>
     val carFontScale: StateFlow<Float>
     val carCoverScale: StateFlow<Float>
-    val carContentMargin: StateFlow<Float>
+    val carContentMarginTop: StateFlow<Float>
+    val carContentMarginBottom: StateFlow<Float>
     val carImmersiveMode: StateFlow<Boolean>
 
     suspend fun setCarDisplayMode(mode: CarDisplayMode)
     suspend fun setCarUiScale(scale: Float)
     suspend fun setCarFontScale(scale: Float)
     suspend fun setCarCoverScale(scale: Float)
-    suspend fun setCarContentMargin(margin: Float)
+    suspend fun setCarContentMarginTop(margin: Float)
+    suspend fun setCarContentMarginBottom(margin: Float)
     suspend fun setCarImmersiveMode(enabled: Boolean)
 }
 
@@ -375,14 +378,16 @@ object UnsupportedCarDisplayPreferencesStore : CarDisplayPreferencesStore {
     private val mutableCarUiScale = MutableStateFlow(DEFAULT_CAR_UI_SCALE)
     private val mutableCarFontScale = MutableStateFlow(DEFAULT_CAR_FONT_SCALE)
     private val mutableCarCoverScale = MutableStateFlow(DEFAULT_CAR_COVER_SCALE)
-    private val mutableCarContentMargin = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN)
+    private val mutableCarContentMarginTop = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN_TOP)
+    private val mutableCarContentMarginBottom = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN_BOTTOM)
     private val mutableCarImmersiveMode = MutableStateFlow(DEFAULT_CAR_IMMERSIVE_MODE)
 
     override val carDisplayMode: StateFlow<CarDisplayMode> = mutableCarDisplayMode
     override val carUiScale: StateFlow<Float> = mutableCarUiScale
     override val carFontScale: StateFlow<Float> = mutableCarFontScale
     override val carCoverScale: StateFlow<Float> = mutableCarCoverScale
-    override val carContentMargin: StateFlow<Float> = mutableCarContentMargin
+    override val carContentMarginTop: StateFlow<Float> = mutableCarContentMarginTop
+    override val carContentMarginBottom: StateFlow<Float> = mutableCarContentMarginBottom
     override val carImmersiveMode: StateFlow<Boolean> = mutableCarImmersiveMode
 
     override suspend fun setCarDisplayMode(mode: CarDisplayMode) {
@@ -401,8 +406,22 @@ object UnsupportedCarDisplayPreferencesStore : CarDisplayPreferencesStore {
         mutableCarCoverScale.value = normalizedCarDisplayValue(scale, CAR_COVER_SCALE_MIN, CAR_COVER_SCALE_MAX, DEFAULT_CAR_COVER_SCALE)
     }
 
-    override suspend fun setCarContentMargin(margin: Float) {
-        mutableCarContentMargin.value = normalizedCarDisplayValue(margin, CAR_CONTENT_MARGIN_MIN, CAR_CONTENT_MARGIN_MAX, DEFAULT_CAR_CONTENT_MARGIN)
+    override suspend fun setCarContentMarginTop(margin: Float) {
+        mutableCarContentMarginTop.value = normalizedCarDisplayValue(
+            margin,
+            CAR_CONTENT_MARGIN_MIN,
+            CAR_CONTENT_MARGIN_MAX,
+            DEFAULT_CAR_CONTENT_MARGIN_TOP,
+        )
+    }
+
+    override suspend fun setCarContentMarginBottom(margin: Float) {
+        mutableCarContentMarginBottom.value = normalizedCarDisplayValue(
+            margin,
+            CAR_CONTENT_MARGIN_MIN,
+            CAR_CONTENT_MARGIN_MAX,
+            DEFAULT_CAR_CONTENT_MARGIN_BOTTOM,
+        )
     }
 
     override suspend fun setCarImmersiveMode(enabled: Boolean) {

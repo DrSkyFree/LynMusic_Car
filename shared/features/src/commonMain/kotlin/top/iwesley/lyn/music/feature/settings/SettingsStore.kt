@@ -28,7 +28,8 @@ import top.iwesley.lyn.music.core.model.AppDataLocationChangeMode
 import top.iwesley.lyn.music.core.model.AppDataLocationPlatformService
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
 import top.iwesley.lyn.music.core.model.CarDisplayMode
-import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN_BOTTOM
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN_TOP
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_COVER_SCALE
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_DISPLAY_MODE
 import top.iwesley.lyn.music.core.model.DEFAULT_CAR_FONT_SCALE
@@ -70,8 +71,10 @@ import top.iwesley.lyn.music.core.model.withThemePalette
 import top.iwesley.lyn.music.core.mvi.BaseStore
 import top.iwesley.lyn.music.data.repository.AppUpdateRepository
 import top.iwesley.lyn.music.data.repository.LRCLIB_JSON_MAP_EXTRACTOR
+import top.iwesley.lyn.music.data.repository.LRCLIB_SOURCE_ID
 import top.iwesley.lyn.music.data.repository.SettingsRepository
 import top.iwesley.lyn.music.data.repository.UnsupportedAppUpdateRepository
+import top.iwesley.lyn.music.domain.PRESET_OIAPI_QQMUSIC_SOURCE_ID
 import top.iwesley.lyn.music.domain.DEFAULT_LRCAPI_URL
 import top.iwesley.lyn.music.domain.MANAGED_LRCAPI_SOURCE_ID
 import top.iwesley.lyn.music.domain.MANAGED_MUSICMATCH_SOURCE_ID
@@ -106,8 +109,11 @@ data class SettingsState(
     val carUiScale: Float = DEFAULT_CAR_UI_SCALE,
     val carFontScale: Float = DEFAULT_CAR_FONT_SCALE,
     val carCoverScale: Float = DEFAULT_CAR_COVER_SCALE,
-    val carContentMargin: Float = DEFAULT_CAR_CONTENT_MARGIN,
+    val carContentMarginTop: Float = DEFAULT_CAR_CONTENT_MARGIN_TOP,
+    val carContentMarginBottom: Float = DEFAULT_CAR_CONTENT_MARGIN_BOTTOM,
     val carImmersiveMode: Boolean = DEFAULT_CAR_IMMERSIVE_MODE,
+    val lyricsFetchEnabled: Boolean = true,
+    val coverFetchEnabled: Boolean = true,
     val navidromeWifiAudioQuality: NavidromeAudioQuality = NavidromeAudioQuality.Original,
     val navidromeMobileAudioQuality: NavidromeAudioQuality = NavidromeAudioQuality.Kbps192,
     val useAndroidExtensionDecoder: Boolean = false,
@@ -180,8 +186,11 @@ sealed interface SettingsIntent {
     data class CarUiScaleChanged(val value: Float) : SettingsIntent
     data class CarFontScaleChanged(val value: Float) : SettingsIntent
     data class CarCoverScaleChanged(val value: Float) : SettingsIntent
-    data class CarContentMarginChanged(val value: Float) : SettingsIntent
+    data class CarContentMarginTopChanged(val value: Float) : SettingsIntent
+    data class CarContentMarginBottomChanged(val value: Float) : SettingsIntent
     data class CarImmersiveModeChanged(val value: Boolean) : SettingsIntent
+    data class LyricsFetchEnabledChanged(val value: Boolean) : SettingsIntent
+    data class CoverFetchEnabledChanged(val value: Boolean) : SettingsIntent
     data class NavidromeWifiAudioQualityChanged(val value: NavidromeAudioQuality) : SettingsIntent
     data class NavidromeMobileAudioQualityChanged(val value: NavidromeAudioQuality) : SettingsIntent
     data class AndroidExtensionDecoderChanged(val value: Boolean) : SettingsIntent
@@ -315,9 +324,21 @@ class SettingsStore(
                 val managedMusicmatch = sources
                     .filterIsInstance<WorkflowLyricsSourceConfig>()
                     .firstOrNull(::isManagedMusicmatchSource)
+                val lyricsSourceEnabled = sources
+                    .filterIsInstance<LyricsSourceConfig>()
+                    .firstOrNull { it.id == LRCLIB_SOURCE_ID }
+                    ?.enabled
+                    ?: false
+                val coverSourceEnabled = sources
+                    .filterIsInstance<WorkflowLyricsSourceConfig>()
+                    .firstOrNull { it.id == PRESET_OIAPI_QQMUSIC_SOURCE_ID }
+                    ?.enabled
+                    ?: false
                 updateState { state ->
                     state.copy(
                         sources = sources,
+                        lyricsFetchEnabled = lyricsSourceEnabled,
+                        coverFetchEnabled = coverSourceEnabled,
                         lrcApiUrl = when {
                             managedLrcApi != null -> extractManagedLrcApiUrl(managedLrcApi).orEmpty()
                             state.hasLrcApiSource -> ""
@@ -409,8 +430,13 @@ class SettingsStore(
             }
         }
         scope.launch {
-            repository.carContentMargin.collect { margin ->
-                updateState { state -> state.copy(carContentMargin = margin) }
+            repository.carContentMarginTop.collect { margin ->
+                updateState { state -> state.copy(carContentMarginTop = margin) }
+            }
+        }
+        scope.launch {
+            repository.carContentMarginBottom.collect { margin ->
+                updateState { state -> state.copy(carContentMarginBottom = margin) }
             }
         }
         scope.launch {
@@ -702,9 +728,24 @@ class SettingsStore(
                 updateState { it.copy(carCoverScale = intent.value) }
             }
 
-            is SettingsIntent.CarContentMarginChanged -> {
-                repository.setCarContentMargin(intent.value)
-                updateState { it.copy(carContentMargin = intent.value) }
+            is SettingsIntent.CarContentMarginTopChanged -> {
+                repository.setCarContentMarginTop(intent.value)
+                updateState { it.copy(carContentMarginTop = intent.value) }
+            }
+
+            is SettingsIntent.CarContentMarginBottomChanged -> {
+                repository.setCarContentMarginBottom(intent.value)
+                updateState { it.copy(carContentMarginBottom = intent.value) }
+            }
+
+            is SettingsIntent.LyricsFetchEnabledChanged -> {
+                repository.setLyricsSourceEnabled(LRCLIB_SOURCE_ID, intent.value)
+                updateState { it.copy(lyricsFetchEnabled = intent.value) }
+            }
+
+            is SettingsIntent.CoverFetchEnabledChanged -> {
+                repository.setLyricsSourceEnabled(PRESET_OIAPI_QQMUSIC_SOURCE_ID, intent.value)
+                updateState { it.copy(coverFetchEnabled = intent.value) }
             }
 
             is SettingsIntent.CarImmersiveModeChanged -> {
@@ -1667,8 +1708,6 @@ class SettingsStore(
             AppStorageCategory.Artwork -> uiText(Res.string.storage_artwork_cache)
             AppStorageCategory.PlaybackCache -> uiText(Res.string.storage_playback_cache)
             AppStorageCategory.OfflineDownloads -> uiText(Res.string.storage_offline_music)
-            AppStorageCategory.LyricsShareTemp -> uiText(Res.string.storage_lyrics_share_temporary_files)
-            AppStorageCategory.TagEditTemp -> uiText(Res.string.storage_tags_temporary_files)
         }
     }
 
