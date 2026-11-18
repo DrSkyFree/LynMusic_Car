@@ -6,15 +6,15 @@
 
 ## 界面预览
 
-以下均为真实车机上的实拍/截图(v1.2.0):
+以下均为 **Android 模拟器(车机横屏 1920×720)实机截图**(v1.2.0):
 
-| 外观模式 · 使用设备 | 屏幕缩放与边距调整 |
+| 使用设备 · 全屏开关 | 屏幕缩放与边距调整 |
 | :---: | :---: |
-| ![外观模式与使用设备](docs/screenshots/appearance-device-mode.jpg) | ![屏幕缩放与边距调整](docs/screenshots/display-scaling-margins.jpg) |
+| ![使用设备与全屏开关](docs/screenshots/appearance-device-mode.jpg) | ![屏幕缩放与边距调整](docs/screenshots/display-scaling-margins.jpg) |
 
-**真车实测**(全屏模式开启,系统状态栏已隐藏,四周边距滑条自动置灰):
+**全屏模式**(开启后系统状态栏/导航栏隐藏,回到前台自动重套):
 
-![真车全屏模式实拍](docs/screenshots/real-car-fullscreen.jpg)
+![全屏模式](docs/screenshots/real-car-fullscreen.jpg)
 
 ## 定位与适配
 
@@ -161,7 +161,7 @@ LynMusic_Car/
 ├─ cast/api/               # 外部协议接口(已裁剪为最小集)
 ├─ buildSrc/               # 自定义 Gradle 构建逻辑
 ├─ tools/                  # Python 辅助校验脚本
-├─ docs/screenshots/       # 界面预览图(真车实拍)
+├─ docs/screenshots/       # 界面预览图(Android 模拟器实机截图)
 ├─ .github/workflows/      # CI:构建、签名、指纹校验、发 Release
 └─ app-version.xcconfig    # 版本号唯一来源
 ```
