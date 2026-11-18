@@ -6,15 +6,27 @@
 
 ## 界面预览
 
-以下均为 **Android 模拟器(车机横屏 1920×720)实机截图**(v1.2.0):
+以下均为 **Android 模拟器(车机横屏 1920×720)实机截图**,界面语言为简体中文:
 
-| 使用设备 · 全屏开关 | 屏幕缩放与边距调整 |
+**我的页**:歌单 / 喜欢 / 专辑 / 艺人 四个入口,右上角电源按钮可完全退出。
+
+![我的页](docs/screenshots/my-page-entries.jpg)
+
+| 曲库管理(歌曲来源 + 曲库扫描) | 歌词与封面(在线双开关) |
 | :---: | :---: |
-| ![使用设备与全屏开关](docs/screenshots/appearance-device-mode.jpg) | ![屏幕缩放与边距调整](docs/screenshots/display-scaling-margins.jpg) |
+| ![曲库管理](docs/screenshots/library-management.jpg) | ![歌词与封面](docs/screenshots/lyrics-and-artwork.jpg) |
 
-**全屏模式**(开启后系统状态栏/导航栏隐藏,回到前台自动重套):
+| 主题与缩放 · 使用设备 | 屏幕缩放与边距调整 |
+| :---: | :---: |
+| ![主题与缩放](docs/screenshots/appearance-device-mode.jpg) | ![缩放与边距](docs/screenshots/display-scaling-margins.jpg) |
 
-![全屏模式](docs/screenshots/real-car-fullscreen.jpg)
+**曲库**:歌曲 / 专辑 / 艺人 / 文件夹 四页签,支持字母索引与批量操作。
+
+![曲库](docs/screenshots/library-browse.jpg)
+
+**全屏模式**:开启后隐藏系统状态栏与导航栏,上下边距滑条自动置灰(全屏下无需让位)。
+
+![全屏模式](docs/screenshots/fullscreen-mode.jpg)
 
 ## 定位与适配
 
