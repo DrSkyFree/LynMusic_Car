@@ -50,8 +50,11 @@ jobs:
           ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
         run: ./gradlew clean :automotiveApp:assembleRelease
 
+      # 证书指纹是公开信息,固定在此;每次发布核对其不变,保证覆盖安装兼容
       - name: Verify APK signatures (fingerprint check, fail on unsigned)
         shell: bash
+        env:
+          EXPECTED_CERT_SHA256: 12ce1bfad3fadd82331c21d384f548fcfaf2d5f5a2c073fc28411303ba024e73
         run: |
           SDK_DIR="$ANDROID_HOME"
           APKSIGNER=$(find "$SDK_DIR/build-tools" -name "apksigner" -type f | sort -V | tail -1)
@@ -59,8 +62,15 @@ jobs:
           FAIL=0
           for apk in automotiveApp/build/outputs/apk/release/*.apk; do
             echo "--- $apk ---"
-            "$APKSIGNER" verify --print-certs "$apk" | tee /tmp/cert.txt
-            grep -q "Signer #1 certificate SHA-256 digest" /tmp/cert.txt || { echo "未检测到签名: $apk"; FAIL=1; }
+            "$APKSIGNER" verify --print-certs "$apk" > /tmp/cert.txt 2>&1 || { echo "apksigner 校验失败: $apk"; FAIL=1; continue; }
+            CERT_SHA=$(grep -oE '[0-9a-f]{64}' /tmp/cert.txt | head -1)
+            if [ -z "$CERT_SHA" ]; then
+              echo "未检测到签名: $apk"; FAIL=1; continue
+            fi
+            echo "签名证书 SHA-256: $CERT_SHA"
+            if [ "$CERT_SHA" != "$EXPECTED_CERT_SHA256" ]; then
+              echo "指纹与预期不一致!预期 $EXPECTED_CERT_SHA256"; FAIL=1
+            fi
           done
           exit $FAIL
 
