@@ -49,12 +49,26 @@ fun localFolderPersistentIdentity(reference: String): String {
     return reference
 }
 
+/**
+ * Readable label for a stored folder link.
+ *
+ * A SAF tree URI used to be printed verbatim as `content://…/tree/primary%3AMusic`, which told the user
+ * nothing on a car head unit. Tree references now render as the volume plus the folder path inside it, so
+ * the source card shows both which stick and which folder it points at.
+ */
 fun displayLocalFolderReference(reference: String): UiText {
-    return if (reference.startsWith(IOS_LOCAL_FOLDER_REFERENCE_PREFIX)) {
-        uiText(Res.string.source_ios_files_index_label)
-    } else {
-        UiText.Raw(reference)
+    if (reference.startsWith(IOS_LOCAL_FOLDER_REFERENCE_PREFIX)) {
+        return uiText(Res.string.source_ios_files_index_label)
     }
+    val safTree = parseSafTreeReference(reference)
+    if (safTree != null) {
+        return if (safTree.isRemovableVolume) {
+            uiText(Res.string.folder_picker_usb_drive_named, safTree.displayPath)
+        } else {
+            UiText.Raw(safTree.displayPath)
+        }
+    }
+    return UiText.Raw(reference)
 }
 
 fun buildIosLocalMediaLocator(sourceId: String, relativePath: String): String {

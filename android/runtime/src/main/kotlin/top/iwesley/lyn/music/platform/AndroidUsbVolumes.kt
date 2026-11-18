@@ -52,6 +52,8 @@ internal fun listAndroidUsbVolumes(
         }
     }
 
+    // API 30+ is the only version where StorageVolume.directory exists; the mount table supplies the same
+    // roots on Android 7-9, otherwise a plugged-in stick stays invisible to the built-in picker.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         context.getSystemService(StorageManager::class.java)?.storageVolumes?.forEach { volume ->
             if (!volume.isRemovable || !isReadableStorageVolumeState(volume.state)) return@forEach
@@ -59,6 +61,13 @@ internal fun listAndroidUsbVolumes(
             val key = androidUsbVolumeKey(volumeUuid = volume.uuid, root = directory)
             addRoot(directory, keySource = "uuid", key = key, source = "storage-volume")
         }
+    }
+
+    listMountedRemovableVolumeRoots(logger).forEach { root ->
+        // No platform uuid on API < 30, so the key falls back to the file-system UUID in the mount path and
+        // then to the backing device node — both survive a remount, unlike the mount point itself.
+        val key = androidUsbVolumeKey(volumeUuid = null, root = root)
+        addRoot(root, keySource = key.keySource(), key = key, source = "mounted-volume")
     }
 
     val primaryRoot = Environment.getExternalStorageDirectory().canonicalFileOrSelf()
@@ -211,7 +220,5 @@ internal fun isPlausibleAndroidUsbMediaPath(path: String): Boolean {
         firstSegment != "sdcard"
 }
 
-private const val PROC_MOUNTS_PATH = "/proc/mounts"
-private const val MNT_MEDIA_RW_ROOT_PATH = "/mnt/media_rw"
 private val FILESYSTEM_UUID_PATTERN = Regex("^[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$")
 internal const val USB_VOLUME_LOG_TAG = "UsbVolume"

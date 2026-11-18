@@ -181,6 +181,18 @@ internal fun listAndroidStorageRoots(
         )
     }
 
+    // Volumes the StorageManager never describes (common on Android 7-9 head units) still show up here, so the
+    // built-in picker can offer the stick the same way the system file manager does.
+    listMountedRemovableVolumeRoots(logger).forEach { root ->
+        addRoot(
+            root = root,
+            label = "U 盘 ${root.name}",
+            uiLabel = uiText(Res.string.folder_picker_usb_drive_named, root.name),
+            isRemovable = true,
+            source = "mounted-volume",
+        )
+    }
+
     return roots.values.sortedWith(
         compareBy<AndroidStorageRoot> { it.isRemovable }
             .thenBy { it.label.lowercase() },
@@ -245,7 +257,9 @@ internal fun resolveAndroidLocalTrackUri(locator: String): Uri? {
 }
 
 internal fun resolveTreeUriToDirectory(context: Context, treeUri: Uri): File? {
-    if (!hasDirectLocalFileAccess(context)) return null
+    // SAF grants read access to the tree by itself; requiring the all-files permission here used to make
+    // an authorised USB tree unresolvable on Android 7-9 and pushed the scan onto the slow DocumentFile
+    // walk. Resolution is now attempted whenever the volume root is actually readable.
     if (treeUri.authority != EXTERNAL_STORAGE_DOCUMENTS_AUTHORITY) return null
     val documentId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
     val volumeId = documentId.substringBefore(':').trim()
@@ -261,10 +275,15 @@ private fun resolveStorageVolumeRoot(context: Context, volumeId: String): File? 
         return Environment.getExternalStorageDirectory()
     }
     resolveStorageVolumeRootFromStorageManager(context, volumeId)?.let { return it }
-    return context.getExternalFilesDirs(null)
+    context.getExternalFilesDirs(null)
         .asSequence()
         .filterNotNull()
         .mapNotNull(File::findStorageVolumeRoot)
+        .firstOrNull { root -> root.name.equals(volumeId, ignoreCase = true) }
+        ?.let { return it }
+    // API 30+ is the only version where the two lookups above can succeed for removable media; the mount
+    // table covers Android 7-9, where a SAF-selected USB tree previously failed to resolve at all.
+    return listMountedRemovableVolumeRoots(GlobalDiagnosticLogger)
         .firstOrNull { root -> root.name.equals(volumeId, ignoreCase = true) }
 }
 
@@ -275,15 +294,24 @@ private fun listStorageVolumeRoots(
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return emptyList()
     val storageManager = context.getSystemService(StorageManager::class.java) ?: return emptyList()
     return storageManager.storageVolumes.mapNotNull { volume ->
-        val directory = volume.directoryCompat()
         val description = volume.descriptionCompat(context)
+        if (!isReadableStorageVolumeState(volume.state) || !volume.isRemovable) {
+            logger.info(LOCAL_IMPORT_LOG_TAG) {
+                "storage-volume-skip uuid=${volume.uuid.orEmpty()} state=${volume.state.orEmpty()} " +
+                    "removable=${volume.isRemovable} description=$description"
+            }
+            return@mapNotNull null
+        }
+        // StorageVolume.directory only exists on API 30+; below that the mount table gives the same root,
+        // and without it a mounted USB stick was invisible to the built-in picker on Android 7-9.
+        val root = volume.directoryCompat()
+            ?: resolveStorageVolumeRootFromMounts(volume.uuid, logger)
         logger.info(LOCAL_IMPORT_LOG_TAG) {
             "storage-volume uuid=${volume.uuid.orEmpty()} state=${volume.state.orEmpty()} " +
                 "removable=${volume.isRemovable} emulated=${volume.isEmulated} " +
-                "directory=${directory?.absolutePath ?: "null"} description=$description"
+                "directory=${root?.absolutePath ?: "null"} description=$description"
         }
-        if (!isReadableStorageVolumeState(volume.state) || !volume.isRemovable) return@mapNotNull null
-        val root = directory ?: return@mapNotNull null
+        if (root == null) return@mapNotNull null
         AndroidStorageRoot(
             label = description.ifBlank { "U 盘 ${root.name}" },
             uiLabel = if (description.isBlank()) uiText(Res.string.folder_picker_usb_drive_named, root.name) else null,
@@ -304,6 +332,98 @@ private fun resolveStorageVolumeRootFromStorageManager(context: Context, volumeI
             null
         }
     }
+}
+
+/**
+ * Finds a removable volume's mount point without `StorageVolume.directory`, which only exists on API 30+.
+ *
+ * Android 7-9 expose the same mount points in `/proc/mounts` and as directories under `/storage`,
+ * `/mnt/media_rw` and `/mnt/usb`; the vold UUID in the path is the volume's own uuid. This is what makes a
+ * plugged-in stick visible to the built-in folder picker on an Android 9 head unit.
+ */
+private fun resolveStorageVolumeRootFromMounts(
+    volumeUuid: String?,
+    logger: DiagnosticLogger,
+): File? {
+    val mountedRoots = listMountedRemovableVolumeRoots(logger)
+    val uuid = volumeUuid?.trim()?.takeIf { it.isNotBlank() }
+    if (uuid != null) {
+        mountedRoots.firstOrNull { root -> root.name.equals(uuid, ignoreCase = true) }?.let { return it }
+        val expected = listOf(
+            File(STORAGE_ROOT_PATH, uuid),
+            File(MNT_MEDIA_RW_ROOT_PATH, uuid),
+            File(MNT_USB_ROOT_PATH, uuid),
+        )
+        expected.firstOrNull { it.exists() && it.isDirectory && it.canRead() }?.let { return it }
+    }
+    return mountedRoots.firstOrNull()
+}
+
+/**
+ * Every readable removable mount point the system currently has, derived from `/proc/mounts` plus the
+ * two well-known removable-parent directories. Emulated and primary storage are excluded.
+ */
+internal fun listMountedRemovableVolumeRoots(
+    logger: DiagnosticLogger = GlobalDiagnosticLogger,
+): List<File> {
+    val roots = linkedSetOf<File>()
+
+    fun addRoot(candidate: File, source: String) {
+        val normalized = candidate.canonicalFileOrSelf()
+        if (!normalized.exists() || !normalized.isDirectory || !normalized.canRead()) return
+        if (roots.none { it.absolutePath == normalized.absolutePath }) {
+            roots += normalized
+            logger.info(LOCAL_IMPORT_LOG_TAG) {
+                "removable-root-add source=$source path=${normalized.absolutePath}"
+            }
+        }
+    }
+
+    val mountPoints = runCatching {
+        File(PROC_MOUNTS_PATH).useLines { lines ->
+            lines.mapNotNull { line ->
+                line.split(' ').takeIf { it.size >= 2 }?.get(1)
+            }.toList()
+        }
+    }.getOrElse { error ->
+        logger.info(LOCAL_IMPORT_LOG_TAG) {
+            "proc-mounts-unreadable reason=${error.message.orEmpty()}"
+        }
+        emptyList()
+    }
+    mountPoints
+        .map { it.trim() }
+        .filter { it.isPlausibleRemovableMountPoint() }
+        .forEach { addRoot(File(it), source = "proc-mounts") }
+
+    listOf(STORAGE_ROOT_PATH, MNT_MEDIA_RW_ROOT_PATH, MNT_USB_ROOT_PATH).forEach { parentPath ->
+        val parent = File(parentPath)
+        if (!parent.isDirectory) return@forEach
+        parent.listFiles()
+            .orEmpty()
+            .filter { candidate -> candidate.isDirectory && candidate.canRead() }
+            .filter { candidate -> candidate.name.isPlausibleRemovableVolumeName() }
+            .forEach { candidate -> addRoot(candidate, source = "directory-scan") }
+    }
+
+    return roots.toList()
+}
+
+private fun String.isPlausibleRemovableMountPoint(): Boolean {
+    val normalized = trimEnd('/')
+    val parent = normalized.substringBeforeLast('/')
+    if (parent == MNT_MEDIA_RW_ROOT_PATH || parent == MNT_USB_ROOT_PATH) {
+        return normalized.substringAfterLast('/').isPlausibleRemovableVolumeName()
+    }
+    if (parent != STORAGE_ROOT_PATH) return false
+    return normalized.substringAfterLast('/').isPlausibleRemovableVolumeName()
+}
+
+private fun String.isPlausibleRemovableVolumeName(): Boolean {
+    if (isBlank()) return false
+    if (equals("emulated", ignoreCase = true) || equals("self", ignoreCase = true)) return false
+    if (equals("sdcard", ignoreCase = true) || equals("enc_emulated", ignoreCase = true)) return false
+    return true
 }
 
 internal fun isReadableStorageVolumeState(state: String?): Boolean {
@@ -368,6 +488,8 @@ internal const val EXTERNAL_STORAGE_DOCUMENTS_AUTHORITY = "com.android.externals
 internal const val PRIMARY_VOLUME_ID = "primary"
 internal const val STORAGE_ROOT_PATH = "/storage"
 internal const val MNT_USB_ROOT_PATH = "/mnt/usb"
+internal const val MNT_MEDIA_RW_ROOT_PATH = "/mnt/media_rw"
+internal const val PROC_MOUNTS_PATH = "/proc/mounts"
 private const val FRAMEWORK_PACKAGE_STUBS_PACKAGE = "com.android.tv.frameworkpackagestubs"
 private const val FRAMEWORK_PACKAGE_STUBS_MARKER = "frameworkpackagestubs"
 private const val LOCAL_IMPORT_LOG_TAG = "LocalImport"

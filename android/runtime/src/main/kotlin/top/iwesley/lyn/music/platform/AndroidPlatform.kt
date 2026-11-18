@@ -147,6 +147,8 @@ import top.iwesley.lyn.music.core.model.ImportSourceType
 import top.iwesley.lyn.music.core.model.ImportTrackBatchSink
 import top.iwesley.lyn.music.core.model.LocalFolderPickerMode
 import top.iwesley.lyn.music.core.model.LocalFolderSelection
+import top.iwesley.lyn.music.core.model.isSafTreeReference
+import top.iwesley.lyn.music.core.model.parseSafTreeReference
 import top.iwesley.lyn.music.core.model.LyricsHttpClient
 import top.iwesley.lyn.music.core.model.LyricsHttpResponse
 import top.iwesley.lyn.music.core.model.LyricsRequest
@@ -1558,21 +1560,49 @@ class AndroidLocalFolderPicker(
 
     private val picker = activity.registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
-            runCatching {
-                activity.contentResolver.takePersistableUriPermission(
-                    uri,
-                    IntentFlags.ReadWriteUriPermission,
-                )
-            }
+            takePersistableTreePermission(uri)
         }
         resumeFolderSelection(
             uri?.let {
                 LocalFolderSelection(
-                    label = DocumentFile.fromTreeUri(activity, uri)?.name ?: "本地音乐",
+                    // DocumentFile metadata comes from the provider and is the authoritative folder name;
+                    // the parsed tree reference covers providers that return nothing (some third-party file
+                    // managers on Android 9) and keeps Chinese folder names intact.
+                    label = DocumentFile.fromTreeUri(activity, uri)?.name
+                        ?: parseSafTreeReference(it.toString())?.folderName
+                        ?: "本地音乐",
                     persistentReference = it.toString(),
                 )
             },
         )
+    }
+
+    /**
+     * Persists the granted tree access so the stored link keeps working after a restart.
+     *
+     * A FAT32/exFAT USB stick is mounted read-only and some file managers only hand out read access, so
+     * asking for read+write throws `SecurityException` and — with the exception swallowed — the reference
+     * was left without any persisted grant at all. Retrying with read-only keeps the link alive.
+     */
+    private fun takePersistableTreePermission(uri: android.net.Uri) {
+        val result = runCatching {
+            activity.contentResolver.takePersistableUriPermission(uri, IntentFlags.ReadWriteUriPermission)
+        }
+        if (result.isSuccess) {
+            logger.info(LOCAL_IMPORT_LOG_TAG) { "saf-persist-permission granted=readwrite treeUri=$uri" }
+            return
+        }
+        val readOnly = runCatching {
+            activity.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+        logger.info(LOCAL_IMPORT_LOG_TAG) {
+            "saf-persist-permission granted=${if (readOnly.isSuccess) "read" else "none"} treeUri=$uri " +
+                "readwriteFailure=${result.exceptionOrNull()?.message.orEmpty()} " +
+                "readFailure=${readOnly.exceptionOrNull()?.message.orEmpty()}"
+        }
     }
 
     private val legacyPermissionLauncher = activity.registerForActivityResult(
@@ -1812,6 +1842,16 @@ private class AndroidImportSourceGateway(
                 progressSink = progressSink,
             )
         }
+        // SAF 树 URI 与绝对路径引用走同一套直扫,但不能要求「所有文件访问」:安卓 7-9 上车机通常拿不到
+        // MANAGE_EXTERNAL_STORAGE,旧逻辑因此把 SAF 结果直接判为不可解析,只能退到 DocumentFile 慢遍历。
+        val treeUri = Uri.parse(selection.persistentReference)
+        if (isSafTreeReference(selection.persistentReference)) {
+            return scanSafTree(
+                treeUri = treeUri,
+                sourceId = sourceId,
+                progressSink = progressSink,
+            )
+        }
         val directLocalFileAccess = hasDirectLocalFileAccess(context)
         resolveAndroidLocalTrackFile(selection.persistentReference)
             ?.takeIf { it.isDirectory }
@@ -1845,55 +1885,80 @@ private class AndroidImportSourceGateway(
                     return mediaStoreReport
                 }
             }
-        val treeUri = Uri.parse(selection.persistentReference)
+        // None of the reference families matched: the stored link is neither a USB volume identity, nor a
+        // SAF tree, nor a readable directory. Report it instead of handing a non-tree URI to DocumentFile.
+        logger.warn(LOCAL_IMPORT_LOG_TAG) {
+            "local-folder-reference-unresolved source=$sourceId reference=${selection.persistentReference}"
+        }
+        throw UiTextException(uiText(Res.string.import_usb_volume_unavailable))
+    }
+
+    /**
+     * Scans a SAF tree URI: direct file access first when the volume is readable, then the DocumentFile
+     * walk, then the system media library. SAF itself grants read access to the tree, so the direct scan is
+     * attempted on every Android version instead of only when all-files access was granted.
+     */
+    private fun scanSafTree(
+        treeUri: Uri,
+        sourceId: String,
+        progressSink: ImportScanProgressSink,
+    ): ImportScanReport {
+        val safReference = parseSafTreeReference(treeUri.toString())
         val resolvedDirectory = resolveTreeUriToDirectory(context, treeUri)
         logger.info(LOCAL_IMPORT_LOG_TAG) {
-            "resolve-tree-uri source=$sourceId treeUri=$treeUri directLocalFileAccess=${hasDirectLocalFileAccess(context)} " +
+            "saf-tree-resolve source=$sourceId treeUri=$treeUri volumeId=${safReference?.volumeId.orEmpty()} " +
+                "relativePath=${safReference?.relativePath.orEmpty()} " +
                 "resolvedDirectory=${resolvedDirectory?.absolutePath ?: "null"}"
         }
         resolvedDirectory
-            ?.takeIf { it.isDirectory }
+            ?.takeIf { it.isDirectory && it.canRead() }
             ?.let { root ->
-                return runCatching {
+                val directoryReport = runCatching {
                     scanLocalDirectoryWithLogging(
                         root = root,
                         sourceId = sourceId,
-                        branch = "direct-permission",
+                        branch = "saf-tree-direct",
                         progressSink = progressSink,
                     )
                 }.onFailure { throwable ->
                     logger.warn(LOCAL_IMPORT_LOG_TAG) {
-                        "direct-scan-fallback root=${root.absolutePath} reason=${throwable.message.orEmpty()}"
+                        "saf-tree-direct-failed root=${root.absolutePath} reason=${throwable.message.orEmpty()}"
                     }
-                }.mapCatching { report ->
-                    if (report.discoveredAudioFileCount == 0) {
-                        logger.warn(LOCAL_IMPORT_LOG_TAG) {
-                            "direct-scan-empty-fallback root=${root.absolutePath} treeUri=$treeUri"
-                        }
-                        scanLocalTreeWithLogging(
-                            treeUri = treeUri,
-                            sourceId = sourceId,
-                            branch = "saf-tree",
-                            progressSink = progressSink,
-                        )
-                    } else {
-                        report
-                    }
-                }.getOrElse {
-                    scanLocalTreeWithLogging(
-                        treeUri = treeUri,
-                        sourceId = sourceId,
-                        branch = "saf-tree",
-                        progressSink = progressSink,
-                    )
+                }.getOrNull()
+                if (directoryReport != null && directoryReport.tracks.isNotEmpty()) {
+                    return directoryReport
                 }
+                // A readable mount can still hide files from a direct read on scoped-storage devices; the
+                // media library indexes the same stick and yields playable content:// locators.
+                val mediaStoreReport = scanAndroidMediaStoreAudioUnderRoot(context, root, sourceId, progressSink, logger)
+                if (mediaStoreReport.tracks.isNotEmpty()) {
+                    return mediaStoreReport
+                }
+                if (directoryReport != null) return directoryReport
+            }
+        val treeReport = runCatching {
+            scanLocalTreeWithLogging(
+                treeUri = treeUri,
+                sourceId = sourceId,
+                branch = "saf-tree",
+                progressSink = progressSink,
+            )
+        }.getOrElse { throwable ->
+            logger.error(LOCAL_IMPORT_LOG_TAG, throwable) {
+                "saf-tree-unreadable source=$sourceId treeUri=$treeUri"
+            }
+            throw UiTextException(uiText(Res.string.import_usb_volume_unavailable))
         }
-        return scanLocalTreeWithLogging(
-            treeUri = treeUri,
-            sourceId = sourceId,
-            branch = "saf-tree",
-            progressSink = progressSink,
-        )
+        if (treeReport.tracks.isNotEmpty()) return treeReport
+        resolvedDirectory
+            ?.takeIf { it.isDirectory }
+            ?.let { root ->
+                val mediaStoreReport = scanAndroidMediaStoreAudioUnderRoot(context, root, sourceId, progressSink, logger)
+                if (mediaStoreReport.tracks.isNotEmpty()) {
+                    return mediaStoreReport
+                }
+            }
+        return treeReport
     }
 
     override suspend fun testSamba(draft: SambaSourceDraft) {
