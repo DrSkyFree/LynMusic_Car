@@ -612,11 +612,7 @@ private fun File.loadAndroidDirectoryListing(): AndroidDirectoryListing {
     }
 }
 
-private fun File.isWithinOrSame(root: File): Boolean {
-    val rootPath = root.canonicalPathOrAbsolute()
-    val filePath = canonicalPathOrAbsolute()
-    return filePath == rootPath || filePath.startsWith(rootPath + File.separator)
-}
+// File.isWithinOrSame comes from AndroidFileAccess.kt (internal) and is shared with the USB volume code.
 
 private fun File.selectionLabel(root: AndroidStorageRoot): String {
     return if (this == root.root) {

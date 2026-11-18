@@ -96,6 +96,7 @@ internal fun AutomotiveLandscapePlayerOverlayContent(
     track: Track,
     artworkBitmap: ImageBitmap?,
     appDisplayScalePreset: AppDisplayScalePreset,
+    carCoverScale: Float = 1f,
     isPureMode: Boolean,
     playerArtworkStyle: PlayerArtworkStyle,
     isFavorite: Boolean,
@@ -143,6 +144,7 @@ internal fun AutomotiveLandscapePlayerOverlayContent(
                 track = track,
                 artworkBitmap = artworkBitmap,
                 appDisplayScalePreset = appDisplayScalePreset,
+                carCoverScale = carCoverScale,
                 isPureMode = isPureMode,
                 playerArtworkStyle = playerArtworkStyle,
                 isFavorite = isFavorite,
@@ -178,6 +180,7 @@ private fun AutomotivePlaybackPane(
     track: Track,
     artworkBitmap: ImageBitmap?,
     appDisplayScalePreset: AppDisplayScalePreset,
+    carCoverScale: Float = 1f,
     isPureMode: Boolean,
     playerArtworkStyle: PlayerArtworkStyle,
     isFavorite: Boolean,
@@ -257,6 +260,7 @@ private fun AutomotivePlaybackPane(
                 snapshot = snapshot,
                 track = track,
                 artworkBitmap = artworkBitmap,
+                carCoverScale = carCoverScale,
                 isPureMode = isPureMode,
                 playerArtworkStyle = playerArtworkStyle,
                 isFavorite = isFavorite,
@@ -295,6 +299,7 @@ private fun AutomotiveTrackAndProgress(
     snapshot: PlaybackSnapshot,
     track: Track,
     artworkBitmap: ImageBitmap?,
+    carCoverScale: Float = 1f,
     isPureMode: Boolean,
     playerArtworkStyle: PlayerArtworkStyle,
     isFavorite: Boolean,
@@ -313,6 +318,7 @@ private fun AutomotiveTrackAndProgress(
         val layout = resolveAutomotiveTrackAndProgressLayout(
             maxWidth = maxWidth,
             maxHeight = maxHeight,
+            coverScale = carCoverScale,
         )
         val compactVertical = layout.compactVertical
         val titleStyle =
@@ -1234,29 +1240,32 @@ internal data class AutomotiveTrackAndProgressLayout(
 internal fun resolveAutomotiveTrackAndProgressLayout(
     maxWidth: Dp,
     maxHeight: Dp,
+    coverScale: Float = 1f,
 ): AutomotiveTrackAndProgressLayout {
     val ultraCompactVertical = maxHeight < 320.dp
     val compactVertical = maxHeight < 420.dp
+    // Cover scale (0.6~1.3) multiplies the fractions and bounds proportionally so the artwork
+    // keeps its relative footprint inside the available pane at scale 1f.
     val artworkMaximumSize = when {
         ultraCompactVertical -> 220.dp
         compactVertical -> 250.dp
         else -> 360.dp
-    }
+    } * coverScale
     val artworkWidthFraction = when {
         ultraCompactVertical -> 0.52f
         compactVertical -> 0.56f
         else -> 0.66f
-    }
+    } * coverScale
     val artworkHeightFraction = when {
         ultraCompactVertical -> 0.44f
         compactVertical -> 0.48f
         else -> 0.56f
-    }
+    } * coverScale
     val artworkMinimumSize = when {
         ultraCompactVertical -> 140.dp
         compactVertical -> 150.dp
         else -> 190.dp
-    }
+    } * coverScale
     val artworkSize = minOf(
         maxWidth * artworkWidthFraction,
         maxHeight * artworkHeightFraction,

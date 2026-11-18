@@ -222,4 +222,5 @@
     <string name="update_already_latest">當前已是最新版本。</string>
     <string name="favorites_source_error_detail">%1$s：%2$s</string>
     <string name="lyrics_apply_completed">已套用所選內容。</string>
+    <string name="import_usb_volume_unavailable">該來源所在的 USB 隨身碟未掛載，請插入後重新掃描。</string>
 </resources>

@@ -18,15 +18,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +62,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
@@ -138,7 +142,9 @@ internal fun LiquidGlassDock(
         stretch = 0f
     }
 
-    BoxWithConstraints(modifier.height(64.dp).selectableGroup()) {
+    // No fixed height: the item row (icon + label lines) drives the Dock height so enlarged
+    // font sizes (up to 200%) stay fully visible with up to 2 label lines.
+    BoxWithConstraints(modifier.selectableGroup()) {
         val tabWidth = (maxWidth - 8.dp) / 4
         val insetPx = with(density) { 4.dp.toPx() }
         val tabWidthPx = (constraints.maxWidth - 2f * insetPx).coerceAtLeast(1f) / 4f
@@ -192,8 +198,8 @@ internal fun LiquidGlassDock(
                 onDrawSurface = { drawRect(surface) },
             )
         }
-        Box(Modifier.fillMaxSize().then(gesture)) {
-            Box(Modifier.fillMaxSize().then(panel))
+        Box(Modifier.then(gesture)) {
+            Box(Modifier.matchParentSize().then(panel))
             val lensSurface = (if (light) Color.Black else Color.White).copy(alpha = 0.1f)
             val selection = if (level == DockGlassLevel.Translucent) {
                 Modifier.graphicsLayer {
@@ -220,12 +226,13 @@ internal fun LiquidGlassDock(
                     onDrawSurface = { drawRect(lensSurface) },
                 )
             }
-            Box(
-                Modifier.align(Alignment.CenterStart)
-                    .padding(start = 4.dp)
-                    .graphicsLayer { translationX = (if (isLtr) 1f else -1f) * position * tabWidthPx }
-                    .width(tabWidth).height(56.dp).then(selection),
-            )
+            Box(Modifier.matchParentSize().padding(4.dp)) {
+                Box(
+                    Modifier.align(Alignment.CenterStart)
+                        .graphicsLayer { translationX = (if (isLtr) 1f else -1f) * position * tabWidthPx }
+                        .width(tabWidth).fillMaxHeight().then(selection),
+                )
+            }
             val icons = listOf(
                 Icons.Rounded.LibraryMusic,
                 if (selectedIndex == 1) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -233,10 +240,11 @@ internal fun LiquidGlassDock(
                 Icons.Rounded.MoreHoriz,
             )
             val labels = listOf(uiString(Res.string.library_title), uiString(Res.string.favorites_collection_title), uiString(Res.string.navigation_my_music), uiString(Res.string.common_more))
-            Row(Modifier.fillMaxSize().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Sizing child: its content height (icon + label lines) determines the Dock height.
+            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 icons.forEachIndexed { index, icon ->
                     Box(
-                        modifier = Modifier.weight(1f).height(56.dp)
+                        modifier = Modifier.weight(1f)
                             .selectable(
                                 selected = selectedIndex == index,
                                 enabled = enabled,
@@ -252,16 +260,29 @@ internal fun LiquidGlassDock(
                                 if ((if (dragging) dragIndex.roundToInt() else currentSelection) == index) colors.primary
                                 else colors.onSurfaceVariant,
                         ) {
-                            BadgedIcon(
-                                imageVector = icon,
-                                contentDescription = labels[index],
-                                showBadge = index == 3 && showUpdateBadge,
-                                modifier = Modifier.size(28.dp).graphicsLayer {
-                                    scaleX = 1f + 0.2f * pressProgress
-                                    scaleY = scaleX
-                                },
-                                iconModifier = Modifier.size(28.dp),
-                            )
+                            Column(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                BadgedIcon(
+                                    imageVector = icon,
+                                    contentDescription = labels[index],
+                                    showBadge = index == 3 && showUpdateBadge,
+                                    modifier = Modifier.size(28.dp).graphicsLayer {
+                                        scaleX = 1f + 0.2f * pressProgress
+                                        scaleY = scaleX
+                                    },
+                                    iconModifier = Modifier.size(28.dp),
+                                )
+                                Text(
+                                    text = labels[index],
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
                         }
                     }
                 }

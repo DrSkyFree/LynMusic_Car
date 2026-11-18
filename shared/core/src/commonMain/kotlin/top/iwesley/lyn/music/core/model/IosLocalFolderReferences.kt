@@ -42,7 +42,11 @@ fun parseIosLocalFolderReference(reference: String): IosLocalFolderReference? {
 
 fun localFolderPersistentIdentity(reference: String): String {
     val iosIdentity = parseIosLocalFolderReference(reference)?.identity
-    return iosIdentity?.let { "ios:$it" } ?: reference
+    if (iosIdentity != null) return "ios:$iosIdentity"
+    // A USB reference keeps the same identity no matter where the stick mounts today.
+    val usb = parseUsbLocalFolderReference(reference)
+    if (usb != null) return "usb:${usb.volumeKey}/${usb.volumeRelativePath}"
+    return reference
 }
 
 fun displayLocalFolderReference(reference: String): UiText {

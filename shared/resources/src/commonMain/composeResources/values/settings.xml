@@ -152,4 +152,16 @@
     <string name="vlc_path_not_detected">VLC path not detected</string>
     <string name="vlc_player_path_title">VLC player path</string>
     <string name="theme_white_text">White text</string>
+    <string name="car_display_device_title">Device layout</string>
+    <string name="car_display_device_hint">The app restarts automatically to apply the selected layout.</string>
+    <string name="car_display_device_follow_window">Follow window</string>
+    <string name="car_display_device_portrait">Car (portrait)</string>
+    <string name="car_display_device_landscape">Car (landscape)</string>
+    <string name="car_display_scaling_title">Screen scaling &amp; margins</string>
+    <string name="car_display_ui_scale">UI scale</string>
+    <string name="car_display_font_scale">Font scale</string>
+    <string name="car_display_cover_scale">Cover scale</string>
+    <string name="car_display_margin">Margins</string>
+    <string name="car_display_fullscreen_title">Fullscreen mode</string>
+    <string name="car_display_fullscreen_hint">Hide system status and navigation bars. Some head units draw their own overlay status bar, which apps cannot remove.</string>
 </resources>

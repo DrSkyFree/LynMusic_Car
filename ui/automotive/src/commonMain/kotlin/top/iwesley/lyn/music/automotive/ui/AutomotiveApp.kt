@@ -453,6 +453,8 @@ fun AutomotiveApp(
                             component.offlineDownloadStore.dispatch(OfflineDownloadIntent.ClearMessage)
                         }
                     }
+                    val carContentMargin by component.carContentMargin.collectAsState()
+                    val carCoverScale by component.carCoverScale.collectAsState()
                     val layoutProfile = AutomotiveLayoutProfile(maxWidth = maxWidth, maxHeight = maxHeight)
                     val compact = layoutProfile.isCompactLayout
                     val mobilePortraitMiniPlayer = layoutProfile.isCompactLayout
@@ -499,6 +501,8 @@ fun AutomotiveApp(
                                 },
                                 mobilePortraitMiniPlayer = mobilePortraitMiniPlayer,
                                 hideMiniPlayerBar = false,
+                                carContentMargin = carContentMargin,
+                                carCoverScale = carCoverScale,
                                 onOpenAddToPlaylist = {
                                     openAddToPlaylist(effectivePlayerSnapshot.currentTrack)
                                 },
@@ -536,6 +540,8 @@ fun AutomotiveApp(
                                 onOpenLibraryNavigationTarget = { target ->
                                     details.open(target)
                                 },
+                                carContentMargin = carContentMargin,
+                                carCoverScale = carCoverScale,
                                 onOpenAddToPlaylist = {
                                     openAddToPlaylist(effectivePlayerSnapshot.currentTrack)
                                 },
@@ -554,6 +560,7 @@ fun AutomotiveApp(
                                 appDisplayScalePreset = settingsState.appDisplayScalePreset,
                                 showCompactPlayerLyrics = settingsState.showCompactPlayerLyrics,
                                 playerArtworkStyle = settingsState.playerArtworkStyle,
+                                carCoverScale = carCoverScale,
                                 showEqualizerEntry = component.platform.capabilities.supportsEqualizer &&
                                     component.equalizerPlatformService.isSupported,
                                 onOpenEqualizer = component.equalizerPlatformService::openEqualizer,

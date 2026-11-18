@@ -34,6 +34,12 @@ const val DEFAULT_ANDROID_EXTENSION_DECODER_ENABLED: Boolean = false
 const val DEFAULT_MINIMIZE_WINDOW_ON_CLOSE: Boolean = true
 val DEFAULT_PLAYER_ARTWORK_STYLE: PlayerArtworkStyle = PlayerArtworkStyle.VINYL
 
+/** Incremental diff application is the default scan mode; the full rebuild stays an explicit opt-out. */
+const val DEFAULT_LIBRARY_SCAN_INCREMENTAL: Boolean = true
+
+/** USB library sources are rescanned once, one minute after startup, unless this is turned off. */
+const val DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP: Boolean = true
+
 fun appDisplayScalePresetOrDefault(name: String?): AppDisplayScalePreset {
     return AppDisplayScalePreset.entries.firstOrNull { it.name == name } ?: AppDisplayScalePreset.Default
 }
@@ -121,12 +127,67 @@ interface AppDisplayPreferencesStore {
     suspend fun setAppDisplayScalePreset(preset: AppDisplayScalePreset)
 }
 
+enum class CarDisplayMode {
+    FOLLOW_WINDOW,
+    PORTRAIT,
+    LANDSCAPE,
+}
+
+val DEFAULT_CAR_DISPLAY_MODE: CarDisplayMode = CarDisplayMode.FOLLOW_WINDOW
+const val DEFAULT_CAR_UI_SCALE = 1.0f
+const val DEFAULT_CAR_FONT_SCALE = 1.0f
+const val DEFAULT_CAR_COVER_SCALE = 1.0f
+const val DEFAULT_CAR_CONTENT_MARGIN = 0.0f
+const val DEFAULT_CAR_IMMERSIVE_MODE = false
+
+const val CAR_UI_SCALE_MIN = 0.7f
+const val CAR_UI_SCALE_MAX = 1.4f
+const val CAR_FONT_SCALE_MIN = 0.8f
+const val CAR_FONT_SCALE_MAX = 2.0f
+const val CAR_COVER_SCALE_MIN = 0.6f
+const val CAR_COVER_SCALE_MAX = 1.3f
+const val CAR_CONTENT_MARGIN_MIN = 0.0f
+const val CAR_CONTENT_MARGIN_MAX = 0.3f
+
+fun carDisplayModeOrDefault(name: String?): CarDisplayMode {
+    return CarDisplayMode.entries.firstOrNull { it.name == name } ?: DEFAULT_CAR_DISPLAY_MODE
+}
+
+fun normalizedCarDisplayValue(value: Float, min: Float, max: Float, fallback: Float): Float {
+    if (!value.isFinite()) return fallback
+    return value.coerceIn(min, max)
+}
+
+interface CarDisplayPreferencesStore {
+    val carDisplayMode: StateFlow<CarDisplayMode>
+    val carUiScale: StateFlow<Float>
+    val carFontScale: StateFlow<Float>
+    val carCoverScale: StateFlow<Float>
+    val carContentMargin: StateFlow<Float>
+    val carImmersiveMode: StateFlow<Boolean>
+
+    suspend fun setCarDisplayMode(mode: CarDisplayMode)
+    suspend fun setCarUiScale(scale: Float)
+    suspend fun setCarFontScale(scale: Float)
+    suspend fun setCarCoverScale(scale: Float)
+    suspend fun setCarContentMargin(margin: Float)
+    suspend fun setCarImmersiveMode(enabled: Boolean)
+}
+
 interface NavidromeAudioQualityPreferencesStore {
     val navidromeWifiAudioQuality: StateFlow<NavidromeAudioQuality>
     val navidromeMobileAudioQuality: StateFlow<NavidromeAudioQuality>
 
     suspend fun setNavidromeWifiAudioQuality(quality: NavidromeAudioQuality)
     suspend fun setNavidromeMobileAudioQuality(quality: NavidromeAudioQuality)
+}
+
+interface LibraryScanPreferencesStore {
+    val scanIncremental: StateFlow<Boolean>
+    val autoScanOnStartup: StateFlow<Boolean>
+
+    suspend fun setScanIncremental(enabled: Boolean)
+    suspend fun setAutoScanOnStartup(enabled: Boolean)
 }
 
 interface PlaybackDecoderPreferencesStore {
@@ -233,6 +294,22 @@ object UnsupportedNavidromeAudioQualityPreferencesStore : NavidromeAudioQualityP
     }
 }
 
+object UnsupportedLibraryScanPreferencesStore : LibraryScanPreferencesStore {
+    private val mutableScanIncremental = MutableStateFlow(DEFAULT_LIBRARY_SCAN_INCREMENTAL)
+    private val mutableAutoScanOnStartup = MutableStateFlow(DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP)
+
+    override val scanIncremental: StateFlow<Boolean> = mutableScanIncremental
+    override val autoScanOnStartup: StateFlow<Boolean> = mutableAutoScanOnStartup
+
+    override suspend fun setScanIncremental(enabled: Boolean) {
+        mutableScanIncremental.value = enabled
+    }
+
+    override suspend fun setAutoScanOnStartup(enabled: Boolean) {
+        mutableAutoScanOnStartup.value = enabled
+    }
+}
+
 object UnsupportedPlaybackDecoderPreferencesStore : PlaybackDecoderPreferencesStore {
     private val mutableUseAndroidExtensionDecoder =
         MutableStateFlow(DEFAULT_ANDROID_EXTENSION_DECODER_ENABLED)
@@ -290,5 +367,45 @@ object UnsupportedDesktopVlcPreferencesStore : DesktopVlcPreferencesStore {
     override suspend fun setDesktopVlcAutoDetectedPath(path: String?) {
         mutableAutoDetectedPath.value = path?.takeIf { it.isNotBlank() }
         mutableEffectivePath.value = mutableManualPath.value ?: mutableAutoDetectedPath.value
+    }
+}
+
+object UnsupportedCarDisplayPreferencesStore : CarDisplayPreferencesStore {
+    private val mutableCarDisplayMode = MutableStateFlow(DEFAULT_CAR_DISPLAY_MODE)
+    private val mutableCarUiScale = MutableStateFlow(DEFAULT_CAR_UI_SCALE)
+    private val mutableCarFontScale = MutableStateFlow(DEFAULT_CAR_FONT_SCALE)
+    private val mutableCarCoverScale = MutableStateFlow(DEFAULT_CAR_COVER_SCALE)
+    private val mutableCarContentMargin = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN)
+    private val mutableCarImmersiveMode = MutableStateFlow(DEFAULT_CAR_IMMERSIVE_MODE)
+
+    override val carDisplayMode: StateFlow<CarDisplayMode> = mutableCarDisplayMode
+    override val carUiScale: StateFlow<Float> = mutableCarUiScale
+    override val carFontScale: StateFlow<Float> = mutableCarFontScale
+    override val carCoverScale: StateFlow<Float> = mutableCarCoverScale
+    override val carContentMargin: StateFlow<Float> = mutableCarContentMargin
+    override val carImmersiveMode: StateFlow<Boolean> = mutableCarImmersiveMode
+
+    override suspend fun setCarDisplayMode(mode: CarDisplayMode) {
+        mutableCarDisplayMode.value = mode
+    }
+
+    override suspend fun setCarUiScale(scale: Float) {
+        mutableCarUiScale.value = normalizedCarDisplayValue(scale, CAR_UI_SCALE_MIN, CAR_UI_SCALE_MAX, DEFAULT_CAR_UI_SCALE)
+    }
+
+    override suspend fun setCarFontScale(scale: Float) {
+        mutableCarFontScale.value = normalizedCarDisplayValue(scale, CAR_FONT_SCALE_MIN, CAR_FONT_SCALE_MAX, DEFAULT_CAR_FONT_SCALE)
+    }
+
+    override suspend fun setCarCoverScale(scale: Float) {
+        mutableCarCoverScale.value = normalizedCarDisplayValue(scale, CAR_COVER_SCALE_MIN, CAR_COVER_SCALE_MAX, DEFAULT_CAR_COVER_SCALE)
+    }
+
+    override suspend fun setCarContentMargin(margin: Float) {
+        mutableCarContentMargin.value = normalizedCarDisplayValue(margin, CAR_CONTENT_MARGIN_MIN, CAR_CONTENT_MARGIN_MAX, DEFAULT_CAR_CONTENT_MARGIN)
+    }
+
+    override suspend fun setCarImmersiveMode(enabled: Boolean) {
+        mutableCarImmersiveMode.value = enabled
     }
 }

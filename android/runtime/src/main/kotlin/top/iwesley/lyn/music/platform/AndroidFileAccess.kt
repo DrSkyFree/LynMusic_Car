@@ -323,7 +323,7 @@ private fun StorageVolume.directoryCompat(): File? {
     }
 }
 
-private fun listMountedUsbFallbackRoots(logger: DiagnosticLogger): List<File> {
+internal fun listMountedUsbFallbackRoots(logger: DiagnosticLogger): List<File> {
     val usbRoot = File(MNT_USB_ROOT_PATH)
     val roots = usbRoot.listFiles()
         .orEmpty()
@@ -336,7 +336,7 @@ private fun listMountedUsbFallbackRoots(logger: DiagnosticLogger): List<File> {
     return roots
 }
 
-private fun File.findStorageVolumeRoot(): File? {
+internal fun File.findStorageVolumeRoot(): File? {
     var current: File? = this
     while (current != null) {
         val parentPath = current.parentFile?.absolutePath
@@ -348,13 +348,13 @@ private fun File.findStorageVolumeRoot(): File? {
     return null
 }
 
-private fun File.isWithinOrSame(root: File): Boolean {
+internal fun File.isWithinOrSame(root: File): Boolean {
     val rootPath = root.canonicalFileOrSelf().absolutePath
     val filePath = canonicalFileOrSelf().absolutePath
     return filePath == rootPath || filePath.startsWith(rootPath + File.separator)
 }
 
-private fun File.canonicalFileOrSelf(): File {
+internal fun File.canonicalFileOrSelf(): File {
     return runCatching { canonicalFile }.getOrDefault(absoluteFile)
 }
 
@@ -364,10 +364,10 @@ private fun hasLegacyExternalStorageReadWriteAccess(context: Context): Boolean {
     }
 }
 
-private const val EXTERNAL_STORAGE_DOCUMENTS_AUTHORITY = "com.android.externalstorage.documents"
-private const val PRIMARY_VOLUME_ID = "primary"
-private const val STORAGE_ROOT_PATH = "/storage"
-private const val MNT_USB_ROOT_PATH = "/mnt/usb"
+internal const val EXTERNAL_STORAGE_DOCUMENTS_AUTHORITY = "com.android.externalstorage.documents"
+internal const val PRIMARY_VOLUME_ID = "primary"
+internal const val STORAGE_ROOT_PATH = "/storage"
+internal const val MNT_USB_ROOT_PATH = "/mnt/usb"
 private const val FRAMEWORK_PACKAGE_STUBS_PACKAGE = "com.android.tv.frameworkpackagestubs"
 private const val FRAMEWORK_PACKAGE_STUBS_MARKER = "frameworkpackagestubs"
 private const val LOCAL_IMPORT_LOG_TAG = "LocalImport"

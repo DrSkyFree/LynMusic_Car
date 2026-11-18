@@ -120,6 +120,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import top.iwesley.lyn.music.core.model.AppTab
 import top.iwesley.lyn.music.core.model.AppThemeTextPalette
 import top.iwesley.lyn.music.core.model.CLASSIC_APP_THEME_TOKENS
@@ -306,6 +307,8 @@ internal fun AutomotivePortraitShell(
     hideMiniPlayerBar: Boolean,
     onOpenAddToPlaylist: () -> Unit,
     onTabChanged: (AppTab) -> Unit = onTabSelected,
+    carContentMargin: Float = 0f,
+    carCoverScale: Float = 1f,
 ) {
     val presentation = currentPlayerPresentation()
     val navigationTabs = automotivePrimaryNavigationTabs(portraitNavigation)
@@ -387,6 +390,7 @@ internal fun AutomotivePortraitShell(
                         mobile = true,
                         mobilePortraitMiniPlayer = mobilePortraitMiniPlayer,
                         glassStyle = miniPlayerGlass,
+                        carCoverScale = carCoverScale,
                     )
                 }
                 if (dockBackdrop != null) {
@@ -429,6 +433,14 @@ internal fun AutomotivePortraitShell(
                                 isMoreSheetVisible = false
                                 selectMobileTab(if (portraitNavigation && tab == AppTab.Favorites) lastCollectionTab else tab)
                             },
+                            // Label wraps up to 2 lines so enlarged font sizes stay fully visible.
+                            label = {
+                                Text(
+                                    text = label,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
                             icon = {
                                 Icon(
                                     imageVector = when (tab) {
@@ -452,6 +464,14 @@ internal fun AutomotivePortraitShell(
                     NavigationBarItem(
                         selected = isMoreSelected,
                         onClick = { isMoreSheetVisible = true },
+                        // Label wraps up to 2 lines so enlarged font sizes stay fully visible.
+                        label = {
+                            Text(
+                                text = uiString(Res.string.common_more),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                         icon = {
                             BadgedIcon(
                                 imageVector = Icons.Rounded.MoreHoriz,
@@ -484,7 +504,9 @@ internal fun AutomotivePortraitShell(
                 .then(if (dockBackdrop != null) {
                     Modifier.layerBackdrop(dockBackdrop).background(MaterialTheme.colorScheme.background)
                 } else Modifier)
-                .padding(contentPadding),
+                .padding(contentPadding)
+                // Content-only margin: the bottom Dock (navigation) is never inset.
+                .proportionalShellContentMargin(carContentMargin),
         ) {
             CompositionLocalProvider(
                 LocalDockBottomInset provides if (contentBehindDock) padding.calculateBottomPadding() else 0.dp,
@@ -653,6 +675,8 @@ internal fun AutomotiveLandscapeShell(
     onOpenLibraryNavigationTarget: (LibraryNavigationTarget) -> Unit,
     onOpenAddToPlaylist: () -> Unit,
     onTabChanged: (AppTab) -> Unit = onTabSelected,
+    carContentMargin: Float = 0f,
+    carCoverScale: Float = 1f,
 ) {
     val presentation = currentPlayerPresentation()
     val shellColors = mainShellColors
@@ -689,7 +713,9 @@ internal fun AutomotiveLandscapeShell(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                // Content-only margin: the side navigation rail is never inset.
+                .proportionalShellContentMargin(carContentMargin),
         ) {
             TabContent(
                 selectedTab = selectedTab,
@@ -756,8 +782,48 @@ internal fun AutomotiveLandscapeShell(
                     onOpenAddToPlaylist = onOpenAddToPlaylist,
                     onOpenQueue = { presentation.showQueue(true) },
                     compact = false,
+                    carCoverScale = carCoverScale,
                 )
             }
+        }
+    }
+}
+
+// Insets the content by a fraction of the surrounding available size (horizontal from width,
+// vertical from height). A 0f fraction measures the content exactly as without the modifier.
+// Applied on the shell root content containers only — navigation (Dock / rail) stays full-bleed.
+private fun Modifier.proportionalShellContentMargin(fraction: Float): Modifier = layout { measurable, constraints ->
+    val safeFraction = fraction.coerceIn(0f, 1f)
+    val horizontalMargin = if (constraints.hasBoundedWidth) {
+        (constraints.maxWidth * safeFraction).roundToInt()
+    } else {
+        0
+    }
+    val verticalMargin = if (constraints.hasBoundedHeight) {
+        (constraints.maxHeight * safeFraction).roundToInt()
+    } else {
+        0
+    }
+    if (horizontalMargin <= 0 && verticalMargin <= 0) {
+        val placeable = measurable.measure(constraints)
+        layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
+    } else {
+        val contentConstraints = constraints.copy(
+            minWidth = 0,
+            minHeight = 0,
+            maxWidth = (constraints.maxWidth - 2 * horizontalMargin).coerceAtLeast(0),
+            maxHeight = (constraints.maxHeight - 2 * verticalMargin).coerceAtLeast(0),
+        )
+        val placeable = measurable.measure(contentConstraints)
+        layout(
+            width = (placeable.width + 2 * horizontalMargin).coerceAtMost(
+                if (constraints.hasBoundedWidth) constraints.maxWidth else placeable.width,
+            ),
+            height = (placeable.height + 2 * verticalMargin).coerceAtMost(
+                if (constraints.hasBoundedHeight) constraints.maxHeight else placeable.height,
+            ),
+        ) {
+            placeable.placeRelative(horizontalMargin, verticalMargin)
         }
     }
 }
@@ -872,6 +938,9 @@ internal fun AutomotiveSideNavigation(
                                     text = label,
                                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                                     textAlign = if (expanded) TextAlign.Start else TextAlign.Center,
+                                    // Cap at 2 lines so enlarged font sizes wrap instead of clipping.
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier
                                         .layout { measurable, constraints ->
                                             // Fill the label's remaining space so Material's centered

@@ -20,7 +20,7 @@ abstract class VerifyUiModuleBoundaries : DefaultTask() {
 
     @TaskAction
     fun verify() {
-        val pages = setOf(":ui:mobile", ":ui:desktop", ":ui:automotive", ":tvApp")
+        val pages = setOf(":ui:automotive")
         val graph = dependencyEdges.get().map { it.split(" -> ") }
             .groupBy({ it[0] }, { it[1] })
         val failures = mutableSetOf<String>()
@@ -62,7 +62,6 @@ val fullTest = tasks.register<FullTest>("fullTest") {
     expectedMinimumCounts.putAll(mapOf(
         ":app:runtime:jvmTest" to 17,
         ":cast:api:jvmTest" to 9,
-        ":composeApp:jvmTest" to 380,
         ":player:core:jvmTest" to 407,
         ":shared:core:jvmTest" to 161,
         ":shared:data:jvmTest" to 520,
@@ -70,22 +69,14 @@ val fullTest = tasks.register<FullTest>("fullTest") {
         ":shared:resources:jvmTest" to 4,
         ":ui:automotive:jvmTest" to 301,
         ":ui:common:jvmTest" to 57,
-        ":ui:desktop:jvmTest" to 283,
-        ":ui:mobile:jvmTest" to 285,
         ":cast:api:testAndroidHostTest" to 9,
-        ":composeApp:testAndroidHostTest" to 67,
         ":player:core:testAndroidHostTest" to 265,
         ":shared:core:testAndroidHostTest" to 95,
         ":shared:data:testAndroidHostTest" to 100,
         ":shared:features:testAndroidHostTest" to 271,
-        ":ui:mobile:testAndroidHostTest" to 16,
         ":ui:automotive:testAndroidHostTest" to 16,
         ":android:runtime:testDebugUnitTest" to 67,
         ":android:runtime:testReleaseUnitTest" to 67,
-        ":cast:upnp:android:testDebugUnitTest" to 15,
-        ":cast:upnp:android:testReleaseUnitTest" to 15,
-        ":tvApp:testDebugUnitTest" to 37,
-        ":tvApp:testReleaseUnitTest" to 37,
     ))
     val unitTests = subprojects.flatMap { it.tasks.withType<Test>().toList() }
     dependsOn(unitTests)

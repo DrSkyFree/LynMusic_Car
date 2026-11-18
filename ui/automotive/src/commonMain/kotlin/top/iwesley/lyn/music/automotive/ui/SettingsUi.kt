@@ -8,6 +8,15 @@ import top.iwesley.lyn.music.core.model.uiText
 import top.iwesley.lyn.music.core.model.UiText
 
 import top.iwesley.lyn.music.core.model.AppLanguage
+import top.iwesley.lyn.music.core.model.CAR_CONTENT_MARGIN_MAX
+import top.iwesley.lyn.music.core.model.CAR_CONTENT_MARGIN_MIN
+import top.iwesley.lyn.music.core.model.CAR_COVER_SCALE_MAX
+import top.iwesley.lyn.music.core.model.CAR_COVER_SCALE_MIN
+import top.iwesley.lyn.music.core.model.CAR_FONT_SCALE_MAX
+import top.iwesley.lyn.music.core.model.CAR_FONT_SCALE_MIN
+import top.iwesley.lyn.music.core.model.CAR_UI_SCALE_MAX
+import top.iwesley.lyn.music.core.model.CAR_UI_SCALE_MIN
+import top.iwesley.lyn.music.core.model.CarDisplayMode
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -58,6 +67,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -65,6 +78,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -661,8 +675,6 @@ private fun GeneralSettingsPane(
     modifier: Modifier = Modifier,
 ) {
     val shellColors = mainShellColors
-    val showAppDisplayScaleSetting =
-        currentPlatformDescriptor.capabilities.supportsAppDisplayScaleAdjustment
     val showMacOsWindowCloseBehaviorSetting =
         shouldShowMacOsWindowCloseBehaviorSetting(currentPlatformDescriptor)
     val showPlayerArtworkStyleSetting = shouldShowPlayerArtworkStyleSetting(currentPlatformDescriptor)
@@ -985,28 +997,60 @@ private fun GeneralSettingsPane(
                 }
             }
         }
-        if (showAppDisplayScaleSetting) {
-            MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = uiString(Res.string.display_scale_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = uiString(Res.string.display_app_scaling_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = shellColors.secondaryText,
-                        )
-                    }
-                    AppDisplayScaleSlider(
-                        preset = state.appDisplayScalePreset,
-                        onSelect = { preset ->
-                            onSettingsIntent(SettingsIntent.AppDisplayScalePresetChanged(preset))
+        CarDisplayDeviceSettingsCard(
+            state = state,
+            onSettingsIntent = onSettingsIntent,
+        )
+        CarDisplayScalingSettingsCard(
+            state = state,
+            onSettingsIntent = onSettingsIntent,
+        )
+    }
+}
+
+internal fun shouldShowAutoOpenPlayerOnStartupSetting(platform: PlatformDescriptor): Boolean {
+    return true
+}
+
+@Composable
+private fun CarDisplayDeviceSettingsCard(
+    state: SettingsState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
+    MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = uiString(Res.string.car_display_device_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = uiString(Res.string.car_display_device_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = mainShellColors.secondaryText,
+                )
+            }
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                CarDisplayMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = state.carDisplayMode == mode,
+                        onClick = { onSettingsIntent(SettingsIntent.CarDisplayModeChanged(mode)) },
+                        label = {
+                            Text(
+                                text = when (mode) {
+                                    CarDisplayMode.FOLLOW_WINDOW -> uiString(Res.string.car_display_device_follow_window)
+                                    CarDisplayMode.PORTRAIT -> uiString(Res.string.car_display_device_portrait)
+                                    CarDisplayMode.LANDSCAPE -> uiString(Res.string.car_display_device_landscape)
+                                },
+                                maxLines = 2,
+                            )
                         },
                     )
                 }
@@ -1015,8 +1059,114 @@ private fun GeneralSettingsPane(
     }
 }
 
-internal fun shouldShowAutoOpenPlayerOnStartupSetting(platform: PlatformDescriptor): Boolean {
-    return true
+@Composable
+private fun CarDisplayScalingSettingsCard(
+    state: SettingsState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
+    MainShellElevatedCard(shape = RoundedCornerShape(28.dp)) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = uiString(Res.string.car_display_scaling_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = uiString(Res.string.car_display_fullscreen_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = uiString(Res.string.car_display_fullscreen_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = mainShellColors.secondaryText,
+                    )
+                }
+                Switch(
+                    checked = state.carImmersiveMode,
+                    onCheckedChange = { enabled ->
+                        onSettingsIntent(SettingsIntent.CarImmersiveModeChanged(enabled))
+                    },
+                    colors = SwitchDefaults.colors(),
+                )
+            }
+            CarDisplayScaleRow(
+                label = uiString(Res.string.car_display_ui_scale),
+                value = state.carUiScale,
+                range = CAR_UI_SCALE_MIN..CAR_UI_SCALE_MAX,
+                onFinished = { onSettingsIntent(SettingsIntent.CarUiScaleChanged(it)) },
+            )
+            CarDisplayScaleRow(
+                label = uiString(Res.string.car_display_font_scale),
+                value = state.carFontScale,
+                range = CAR_FONT_SCALE_MIN..CAR_FONT_SCALE_MAX,
+                onFinished = { onSettingsIntent(SettingsIntent.CarFontScaleChanged(it)) },
+            )
+            CarDisplayScaleRow(
+                label = uiString(Res.string.car_display_cover_scale),
+                value = state.carCoverScale,
+                range = CAR_COVER_SCALE_MIN..CAR_COVER_SCALE_MAX,
+                onFinished = { onSettingsIntent(SettingsIntent.CarCoverScaleChanged(it)) },
+            )
+            CarDisplayScaleRow(
+                label = uiString(Res.string.car_display_margin),
+                value = state.carContentMargin,
+                range = CAR_CONTENT_MARGIN_MIN..CAR_CONTENT_MARGIN_MAX,
+                enabled = !state.carImmersiveMode,
+                onFinished = { onSettingsIntent(SettingsIntent.CarContentMarginChanged(it)) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CarDisplayScaleRow(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    enabled: Boolean = true,
+    onFinished: (Float) -> Unit,
+) {
+    var localValue by remember(value) { mutableFloatStateOf(value) }
+    val contentAlpha = if (enabled) 1f else 0.45f
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalContentColor.current.copy(alpha = contentAlpha),
+            )
+            Text(
+                text = "%.0f%%".format(localValue * 100f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = LocalContentColor.current.copy(alpha = contentAlpha),
+            )
+        }
+        Slider(
+            value = localValue,
+            onValueChange = { if (enabled) localValue = it },
+            onValueChangeFinished = { if (enabled) onFinished(localValue) },
+            valueRange = range,
+            enabled = enabled,
+        )
+    }
 }
 
 @Composable

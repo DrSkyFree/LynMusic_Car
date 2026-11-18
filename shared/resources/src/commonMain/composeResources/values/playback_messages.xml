@@ -23,6 +23,7 @@
     <string name="playback_vlc_initializing">Initializing VLC. VLC may need to be installed.</string>
     <string name="playback_media_failed">The desktop player cannot play this media.</string>
     <string name="playback_access_failed">Failed to access the song: %1$s</string>
+    <string name="playback_usb_unavailable">The USB drive was unplugged or is inaccessible. Affected songs cannot play right now.</string>
     <string name="playback_unknown_error">Unknown error</string>
     <plurals name="cast_devices_found">
         <item quantity="one">Found %1$s device</item>

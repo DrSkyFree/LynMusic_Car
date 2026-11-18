@@ -14,6 +14,7 @@ import kotlinx.coroutines.withTimeout
 import top.iwesley.lyn.music.cast.CastBackgroundRunSettingsOpener
 import top.iwesley.lyn.music.cast.CastNotificationPermissionRequester
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
+import top.iwesley.lyn.music.core.model.CarDisplayMode
 import top.iwesley.lyn.music.core.model.ArtworkCacheStore
 import top.iwesley.lyn.music.core.model.CompositeSystemPlaybackControlsPlatformService
 import top.iwesley.lyn.music.core.model.DesktopLyricsPlatformService
@@ -60,6 +61,12 @@ class LynMusicAppComponent(
     val lyricsRepository: LyricsRepository,
     val artworkCacheStore: ArtworkCacheStore,
     val appDisplayScalePreset: StateFlow<AppDisplayScalePreset>,
+    val carDisplayMode: StateFlow<CarDisplayMode>,
+    val carUiScale: StateFlow<Float>,
+    val carFontScale: StateFlow<Float>,
+    val carCoverScale: StateFlow<Float>,
+    val carContentMargin: StateFlow<Float>,
+    val carImmersiveMode: StateFlow<Boolean>,
     val castBackgroundRunSettingsOpener: CastBackgroundRunSettingsOpener,
     val castNotificationPermissionRequester: CastNotificationPermissionRequester,
     val desktopLyricsPlatformService: DesktopLyricsPlatformService,
@@ -185,6 +192,12 @@ fun buildPlayerAppComponent(
         lyricsRepository = sharedGraph.lyricsRepository,
         artworkCacheStore = sharedGraph.artworkCacheStore,
         appDisplayScalePreset = sharedGraph.appDisplayScalePreset,
+        carDisplayMode = sharedGraph.carDisplayMode,
+        carUiScale = sharedGraph.carUiScale,
+        carFontScale = sharedGraph.carFontScale,
+        carCoverScale = sharedGraph.carCoverScale,
+        carContentMargin = sharedGraph.carContentMargin,
+        carImmersiveMode = sharedGraph.carImmersiveMode,
         castBackgroundRunSettingsOpener = playerRuntimeServices.castBackgroundRunSettingsOpener,
         castNotificationPermissionRequester = playerRuntimeServices.castNotificationPermissionRequester,
         desktopLyricsPlatformService = sharedGraph.desktopLyricsPlatformService,

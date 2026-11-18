@@ -16,6 +16,9 @@ import top.iwesley.lyn.music.core.model.AppDataLocationPlatformService
 import top.iwesley.lyn.music.core.model.CompositePlaybackStatsReporter
 import top.iwesley.lyn.music.core.model.AppDisplayPreferencesStore
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
+import top.iwesley.lyn.music.core.model.CarDisplayMode
+import top.iwesley.lyn.music.core.model.CarDisplayPreferencesStore
+import top.iwesley.lyn.music.core.model.UnsupportedCarDisplayPreferencesStore
 import top.iwesley.lyn.music.core.model.AudioTagGateway
 import top.iwesley.lyn.music.core.model.AudioTagEditorPlatformService
 import top.iwesley.lyn.music.core.model.CompactPlayerLyricsPreferencesStore
@@ -26,6 +29,7 @@ import top.iwesley.lyn.music.core.model.DeviceInfoGateway
 import top.iwesley.lyn.music.core.model.DiagnosticLogger
 import top.iwesley.lyn.music.core.model.warn
 import top.iwesley.lyn.music.core.model.ImportSourceGateway
+import top.iwesley.lyn.music.core.model.LibraryScanPreferencesStore
 import top.iwesley.lyn.music.core.model.LyricsShareFontLibraryPlatformService
 import top.iwesley.lyn.music.core.model.LyricsShareFontPreferencesStore
 import top.iwesley.lyn.music.core.model.LyricsHttpClient
@@ -44,6 +48,7 @@ import top.iwesley.lyn.music.core.model.SambaCachePreferencesStore
 import top.iwesley.lyn.music.core.model.SecureCredentialStore
 import top.iwesley.lyn.music.core.model.SameNameLyricsFileGateway
 import top.iwesley.lyn.music.core.model.ThemePreferencesStore
+import top.iwesley.lyn.music.core.model.UsbVolumeEvents
 import top.iwesley.lyn.music.core.model.UnsupportedAppStorageGateway
 import top.iwesley.lyn.music.core.model.UnsupportedAppDataLocationPlatformService
 import top.iwesley.lyn.music.core.model.UnsupportedAudioTagEditorPlatformService
@@ -56,6 +61,7 @@ import top.iwesley.lyn.music.core.model.UnsupportedDesktopLyricsPlatformService
 import top.iwesley.lyn.music.core.model.UnsupportedDesktopLyricsPreferencesStore
 import top.iwesley.lyn.music.core.model.UnsupportedDesktopVlcPreferencesStore
 import top.iwesley.lyn.music.core.model.UnsupportedDeviceInfoGateway
+import top.iwesley.lyn.music.core.model.UnsupportedLibraryScanPreferencesStore
 import top.iwesley.lyn.music.core.model.UnsupportedLyricsShareFontLibraryPlatformService
 import top.iwesley.lyn.music.core.model.UnsupportedLyricsShareFontPreferencesStore
 import top.iwesley.lyn.music.core.model.UnsupportedMenuBarLyricsControlsPreferencesStore
@@ -110,6 +116,8 @@ import top.iwesley.lyn.music.domain.resolveEmbyStreamUrlCandidates
 import top.iwesley.lyn.music.domain.RemoteSourceAddressSelector
 import top.iwesley.lyn.music.feature.favorites.FavoritesStore
 import top.iwesley.lyn.music.feature.importing.ImportStore
+import top.iwesley.lyn.music.feature.importing.StartupLibraryAutoScan
+import top.iwesley.lyn.music.feature.importing.UsbVolumeSourceWatcher
 import top.iwesley.lyn.music.feature.library.LibrarySourceFilterPreferencesStore
 import top.iwesley.lyn.music.feature.library.LibraryStore
 import top.iwesley.lyn.music.feature.my.MyStore
@@ -124,10 +132,12 @@ import top.iwesley.lyn.music.core.model.NavidromeLocatorRuntime
 
 data class SharedRuntimeServices(
     val importSourceGateway: ImportSourceGateway,
+    val usbVolumeEvents: UsbVolumeEvents = UsbVolumeEvents.NoOp,
     val secureCredentialStore: SecureCredentialStore,
     val sambaCachePreferencesStore: SambaCachePreferencesStore,
     val themePreferencesStore: ThemePreferencesStore,
     val appDisplayPreferencesStore: AppDisplayPreferencesStore = UnsupportedAppDisplayPreferencesStore,
+    val carDisplayPreferencesStore: CarDisplayPreferencesStore = UnsupportedCarDisplayPreferencesStore,
     val compactPlayerLyricsPreferencesStore: CompactPlayerLyricsPreferencesStore =
         UnsupportedCompactPlayerLyricsPreferencesStore,
     val desktopLyricsPreferencesStore: DesktopLyricsPreferencesStore =
@@ -146,6 +156,8 @@ data class SharedRuntimeServices(
         UnsupportedPlaybackDecoderPreferencesStore,
     val playerArtworkStylePreferencesStore: PlayerArtworkStylePreferencesStore =
         UnsupportedPlayerArtworkStylePreferencesStore,
+    val libraryScanPreferencesStore: LibraryScanPreferencesStore =
+        UnsupportedLibraryScanPreferencesStore,
     val networkConnectionTypeProvider: NetworkConnectionTypeProvider = MobileNetworkConnectionTypeProvider,
     val remoteSourceAddressSelector: RemoteSourceAddressSelector =
         RemoteSourceAddressSelector(networkConnectionTypeProvider),
@@ -196,6 +208,12 @@ class SharedGraph(
     val playbackStatsReporter: PlaybackStatsReporter,
     val audioTagGateway: AudioTagGateway,
     val appDisplayScalePreset: kotlinx.coroutines.flow.StateFlow<AppDisplayScalePreset>,
+    val carDisplayMode: kotlinx.coroutines.flow.StateFlow<CarDisplayMode>,
+    val carUiScale: kotlinx.coroutines.flow.StateFlow<Float>,
+    val carFontScale: kotlinx.coroutines.flow.StateFlow<Float>,
+    val carCoverScale: kotlinx.coroutines.flow.StateFlow<Float>,
+    val carContentMargin: kotlinx.coroutines.flow.StateFlow<Float>,
+    val carImmersiveMode: kotlinx.coroutines.flow.StateFlow<Boolean>,
     val desktopLyricsPlatformService: DesktopLyricsPlatformService,
     val logger: DiagnosticLogger,
     val scope: CoroutineScope,
@@ -229,6 +247,7 @@ fun buildSharedGraph(
         secureCredentialStore = runtimeServices.secureCredentialStore,
         offlineDownloadGateway = runtimeServices.offlineDownloadGateway,
         addressSelector = runtimeServices.remoteSourceAddressSelector,
+        libraryScanPreferencesStore = runtimeServices.libraryScanPreferencesStore,
     )
     val settingsRepository = DefaultSettingsRepository(
         database = database,
@@ -236,6 +255,7 @@ fun buildSharedGraph(
         themePreferencesStore = runtimeServices.themePreferencesStore,
         desktopVlcPreferencesStore = runtimeServices.desktopVlcPreferencesStore,
         appDisplayPreferencesStore = runtimeServices.appDisplayPreferencesStore,
+        carDisplayPreferencesStore = runtimeServices.carDisplayPreferencesStore,
         compactPlayerLyricsPreferencesStore = runtimeServices.compactPlayerLyricsPreferencesStore,
         desktopLyricsPreferencesStore = runtimeServices.desktopLyricsPreferencesStore,
         menuBarLyricsControlsPreferencesStore = runtimeServices.menuBarLyricsControlsPreferencesStore,
@@ -245,6 +265,7 @@ fun buildSharedGraph(
         navidromeAudioQualityPreferencesStore = runtimeServices.navidromeAudioQualityPreferencesStore,
         playbackDecoderPreferencesStore = runtimeServices.playbackDecoderPreferencesStore,
         playerArtworkStylePreferencesStore = runtimeServices.playerArtworkStylePreferencesStore,
+        libraryScanPreferencesStore = runtimeServices.libraryScanPreferencesStore,
     )
     val appUpdateRepository = DefaultAppUpdateRepository(runtimeServices.lyricsHttpClient)
     NavidromeLocatorRuntime.install(
@@ -446,6 +467,24 @@ fun buildSharedGraph(
     scope.launch {
         settingsRepository.ensureDefaults()
     }
+    val importStore = ImportStore(importSourceRepository, platform.capabilities, scope)
+    // Reacts to USB volume mount/removal events from the platform; a no-op when the platform reports none.
+    UsbVolumeSourceWatcher(
+        repository = importSourceRepository,
+        importStore = importStore,
+        events = runtimeServices.usbVolumeEvents.events,
+        scope = scope,
+        logger = runtimeServices.logger,
+    )
+    // One delayed pass, one minute after startup, rescans enabled USB local-folder sources so a stick
+    // that was plugged in before launch gets fresh data without user action; skipped when disabled.
+    StartupLibraryAutoScan(
+        repository = importSourceRepository,
+        importStore = importStore,
+        autoScanOnStartup = runtimeServices.libraryScanPreferencesStore.autoScanOnStartup,
+        scope = scope,
+        logger = runtimeServices.logger,
+    )
     return SharedGraph(
         musicDetailQueries = top.iwesley.lyn.music.feature.details.DefaultMusicDetailQueries(
             libraryRepository, importSourceRepository, navidromeOnlineRepository, offlineDownloadRepository,
@@ -510,7 +549,7 @@ fun buildSharedGraph(
             storeScope = scope,
             startImmediately = false,
         ),
-        importStore = ImportStore(importSourceRepository, platform.capabilities, scope),
+        importStore = importStore,
         offlineDownloadStore = OfflineDownloadStore(
             repository = offlineDownloadRepository,
             storeScope = scope,
@@ -532,6 +571,12 @@ fun buildSharedGraph(
         playbackStatsReporter = playbackStatsReporter,
         audioTagGateway = runtimeServices.audioTagGateway,
         appDisplayScalePreset = runtimeServices.appDisplayPreferencesStore.appDisplayScalePreset,
+        carDisplayMode = runtimeServices.carDisplayPreferencesStore.carDisplayMode,
+        carUiScale = runtimeServices.carDisplayPreferencesStore.carUiScale,
+        carFontScale = runtimeServices.carDisplayPreferencesStore.carFontScale,
+        carCoverScale = runtimeServices.carDisplayPreferencesStore.carCoverScale,
+        carContentMargin = runtimeServices.carDisplayPreferencesStore.carContentMargin,
+        carImmersiveMode = runtimeServices.carDisplayPreferencesStore.carImmersiveMode,
         desktopLyricsPlatformService = runtimeServices.desktopLyricsPlatformService,
         logger = runtimeServices.logger,
         scope = scope,

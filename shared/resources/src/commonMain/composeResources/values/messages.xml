@@ -222,4 +222,5 @@
     <string name="update_already_latest">You are using the latest version.</string>
     <string name="favorites_source_error_detail">%1$s: %2$s</string>
     <string name="lyrics_apply_completed">Selection applied.</string>
+    <string name="import_usb_volume_unavailable">The USB drive holding this source is not mounted. Plug it in and rescan.</string>
 </resources>

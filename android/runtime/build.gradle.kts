@@ -39,7 +39,6 @@ dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 
     api(project(":cast:api"))
-    implementation(project(":cast:upnp:android"))
     api(project(":shared:core"))
     api(project(":shared:data"))
     api(project(":shared:features"))

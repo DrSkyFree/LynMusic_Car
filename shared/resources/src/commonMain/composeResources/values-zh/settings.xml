@@ -152,4 +152,16 @@
     <string name="vlc_path_not_detected">未自动识别到 VLC 路径</string>
     <string name="vlc_player_path_title">VLC 播放器路径</string>
     <string name="theme_white_text">白字</string>
+    <string name="car_display_device_title">使用设备</string>
+    <string name="car_display_device_hint">切换后应用将自动重启并套用对应布局。</string>
+    <string name="car_display_device_follow_window">跟随窗口</string>
+    <string name="car_display_device_portrait">车机(竖屏)</string>
+    <string name="car_display_device_landscape">车机(横屏)</string>
+    <string name="car_display_scaling_title">屏幕缩放与边距调整</string>
+    <string name="car_display_ui_scale">界面缩放</string>
+    <string name="car_display_font_scale">字号缩放</string>
+    <string name="car_display_cover_scale">封面缩放</string>
+    <string name="car_display_margin">四周边距</string>
+    <string name="car_display_fullscreen_title">全屏模式</string>
+    <string name="car_display_fullscreen_hint">隐藏系统状态栏与导航栏;部分车机的覆盖层状态栏无法由应用移除。</string>
 </resources>

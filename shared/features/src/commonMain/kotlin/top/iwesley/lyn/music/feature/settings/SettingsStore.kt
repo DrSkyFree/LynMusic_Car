@@ -27,6 +27,15 @@ import top.iwesley.lyn.music.core.model.AppStorageSnapshot
 import top.iwesley.lyn.music.core.model.AppDataLocationChangeMode
 import top.iwesley.lyn.music.core.model.AppDataLocationPlatformService
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
+import top.iwesley.lyn.music.core.model.CarDisplayMode
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_COVER_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_DISPLAY_MODE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_FONT_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_IMMERSIVE_MODE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_UI_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP
+import top.iwesley.lyn.music.core.model.DEFAULT_LIBRARY_SCAN_INCREMENTAL
 import top.iwesley.lyn.music.core.model.AppThemeId
 import top.iwesley.lyn.music.core.model.AppThemeTextPalette
 import top.iwesley.lyn.music.core.model.AppThemeTextPalettePreferences
@@ -93,10 +102,18 @@ data class SettingsState(
     val autoOpenPlayerOnStartup: Boolean = false,
     val minimizeWindowOnClose: Boolean = DEFAULT_MINIMIZE_WINDOW_ON_CLOSE,
     val appDisplayScalePreset: AppDisplayScalePreset = AppDisplayScalePreset.Default,
+    val carDisplayMode: CarDisplayMode = DEFAULT_CAR_DISPLAY_MODE,
+    val carUiScale: Float = DEFAULT_CAR_UI_SCALE,
+    val carFontScale: Float = DEFAULT_CAR_FONT_SCALE,
+    val carCoverScale: Float = DEFAULT_CAR_COVER_SCALE,
+    val carContentMargin: Float = DEFAULT_CAR_CONTENT_MARGIN,
+    val carImmersiveMode: Boolean = DEFAULT_CAR_IMMERSIVE_MODE,
     val navidromeWifiAudioQuality: NavidromeAudioQuality = NavidromeAudioQuality.Original,
     val navidromeMobileAudioQuality: NavidromeAudioQuality = NavidromeAudioQuality.Kbps192,
     val useAndroidExtensionDecoder: Boolean = false,
     val playerArtworkStyle: PlayerArtworkStyle = PlayerArtworkStyle.VINYL,
+    val scanIncremental: Boolean = DEFAULT_LIBRARY_SCAN_INCREMENTAL,
+    val autoScanOnStartup: Boolean = DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP,
     val supportsLyricsShareFontImport: Boolean = false,
     val importedLyricsShareFonts: List<LyricsShareFontOption> = emptyList(),
     val lyricsShareFontsLoading: Boolean = false,
@@ -159,10 +176,18 @@ sealed interface SettingsIntent {
         val revision: Long = 0L,
     ) : SettingsIntent
     data class AppDisplayScalePresetChanged(val value: AppDisplayScalePreset) : SettingsIntent
+    data class CarDisplayModeChanged(val value: CarDisplayMode) : SettingsIntent
+    data class CarUiScaleChanged(val value: Float) : SettingsIntent
+    data class CarFontScaleChanged(val value: Float) : SettingsIntent
+    data class CarCoverScaleChanged(val value: Float) : SettingsIntent
+    data class CarContentMarginChanged(val value: Float) : SettingsIntent
+    data class CarImmersiveModeChanged(val value: Boolean) : SettingsIntent
     data class NavidromeWifiAudioQualityChanged(val value: NavidromeAudioQuality) : SettingsIntent
     data class NavidromeMobileAudioQualityChanged(val value: NavidromeAudioQuality) : SettingsIntent
     data class AndroidExtensionDecoderChanged(val value: Boolean) : SettingsIntent
     data class PlayerArtworkStyleChanged(val value: PlayerArtworkStyle) : SettingsIntent
+    data class ScanIncrementalChanged(val value: Boolean) : SettingsIntent
+    data class AutoScanOnStartupChanged(val value: Boolean) : SettingsIntent
     data class ThemeSelected(val value: AppThemeId) : SettingsIntent
     data class ThemeTextPaletteSelected(val themeId: AppThemeId, val value: AppThemeTextPalette) : SettingsIntent
     data class CustomThemeColorUpdated(val role: CustomThemeColorRole, val argb: Int) : SettingsIntent
@@ -360,6 +385,36 @@ class SettingsStore(
             }
         }
         scope.launch {
+            repository.carDisplayMode.collect { mode ->
+                updateState { state -> state.copy(carDisplayMode = mode) }
+            }
+        }
+        scope.launch {
+            repository.carUiScale.collect { scale ->
+                updateState { state -> state.copy(carUiScale = scale) }
+            }
+        }
+        scope.launch {
+            repository.carFontScale.collect { scale ->
+                updateState { state -> state.copy(carFontScale = scale) }
+            }
+        }
+        scope.launch {
+            repository.carCoverScale.collect { scale ->
+                updateState { state -> state.copy(carCoverScale = scale) }
+            }
+        }
+        scope.launch {
+            repository.carContentMargin.collect { margin ->
+                updateState { state -> state.copy(carContentMargin = margin) }
+            }
+        }
+        scope.launch {
+            repository.carImmersiveMode.collect { enabled ->
+                updateState { state -> state.copy(carImmersiveMode = enabled) }
+            }
+        }
+        scope.launch {
             repository.navidromeWifiAudioQuality.collect { quality ->
                 updateState { state -> state.copy(navidromeWifiAudioQuality = quality) }
             }
@@ -377,6 +432,16 @@ class SettingsStore(
         scope.launch {
             repository.playerArtworkStyle.collect { style ->
                 updateState { state -> state.copy(playerArtworkStyle = style) }
+            }
+        }
+        scope.launch {
+            repository.scanIncremental.collect { enabled ->
+                updateState { state -> state.copy(scanIncremental = enabled) }
+            }
+        }
+        scope.launch {
+            repository.autoScanOnStartup.collect { enabled ->
+                updateState { state -> state.copy(autoScanOnStartup = enabled) }
             }
         }
         scope.launch {
@@ -613,6 +678,36 @@ class SettingsStore(
                 updateState { it.copy(appDisplayScalePreset = intent.value) }
             }
 
+            is SettingsIntent.CarDisplayModeChanged -> {
+                repository.setCarDisplayMode(intent.value)
+                updateState { it.copy(carDisplayMode = intent.value) }
+            }
+
+            is SettingsIntent.CarUiScaleChanged -> {
+                repository.setCarUiScale(intent.value)
+                updateState { it.copy(carUiScale = intent.value) }
+            }
+
+            is SettingsIntent.CarFontScaleChanged -> {
+                repository.setCarFontScale(intent.value)
+                updateState { it.copy(carFontScale = intent.value) }
+            }
+
+            is SettingsIntent.CarCoverScaleChanged -> {
+                repository.setCarCoverScale(intent.value)
+                updateState { it.copy(carCoverScale = intent.value) }
+            }
+
+            is SettingsIntent.CarContentMarginChanged -> {
+                repository.setCarContentMargin(intent.value)
+                updateState { it.copy(carContentMargin = intent.value) }
+            }
+
+            is SettingsIntent.CarImmersiveModeChanged -> {
+                repository.setCarImmersiveMode(intent.value)
+                updateState { it.copy(carImmersiveMode = intent.value) }
+            }
+
             is SettingsIntent.NavidromeWifiAudioQualityChanged -> {
                 repository.setNavidromeWifiAudioQuality(intent.value)
                 updateState { it.copy(navidromeWifiAudioQuality = intent.value) }
@@ -631,6 +726,16 @@ class SettingsStore(
             is SettingsIntent.PlayerArtworkStyleChanged -> {
                 repository.setPlayerArtworkStyle(intent.value)
                 updateState { it.copy(playerArtworkStyle = intent.value) }
+            }
+
+            is SettingsIntent.ScanIncrementalChanged -> {
+                repository.setScanIncremental(intent.value)
+                updateState { it.copy(scanIncremental = intent.value) }
+            }
+
+            is SettingsIntent.AutoScanOnStartupChanged -> {
+                repository.setAutoScanOnStartup(intent.value)
+                updateState { it.copy(autoScanOnStartup = intent.value) }
             }
 
             is SettingsIntent.ThemeSelected -> {

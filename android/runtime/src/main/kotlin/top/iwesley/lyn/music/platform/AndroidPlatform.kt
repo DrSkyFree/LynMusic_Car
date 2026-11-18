@@ -14,6 +14,8 @@ import top.iwesley.lyn.music.core.model.AppLanguageRuntime
 import top.iwesley.lyn.music.core.model.appLanguageOrDefault
 import top.iwesley.lyn.music.core.model.UiTextException
 import top.iwesley.lyn.music.core.model.uiText
+import top.iwesley.lyn.music.core.model.UsbLocalFolderReference
+import top.iwesley.lyn.music.core.model.parseUsbLocalFolderReference
 
 import android.app.AlertDialog
 import android.app.Activity
@@ -91,9 +93,27 @@ import top.iwesley.lyn.music.buildSharedGraph
 import top.iwesley.lyn.music.cast.UnsupportedCastBackgroundRunSettingsOpener
 import top.iwesley.lyn.music.cast.UnsupportedCastSessionForegroundPlatformService
 import top.iwesley.lyn.music.cast.UnsupportedCastNotificationPermissionRequester
-import top.iwesley.lyn.music.cast.upnp.android.AndroidUpnpCastGateway
+import top.iwesley.lyn.music.cast.UnsupportedCastGateway
 import top.iwesley.lyn.music.core.model.AndroidDiagnosticLogger
 import top.iwesley.lyn.music.core.model.AppDisplayPreferencesStore
+import top.iwesley.lyn.music.core.model.CarDisplayMode
+import top.iwesley.lyn.music.core.model.CarDisplayPreferencesStore
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_COVER_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_DISPLAY_MODE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_IMMERSIVE_MODE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_FONT_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_UI_SCALE
+import top.iwesley.lyn.music.core.model.CAR_CONTENT_MARGIN_MAX
+import top.iwesley.lyn.music.core.model.CAR_CONTENT_MARGIN_MIN
+import top.iwesley.lyn.music.core.model.CAR_COVER_SCALE_MAX
+import top.iwesley.lyn.music.core.model.CAR_COVER_SCALE_MIN
+import top.iwesley.lyn.music.core.model.CAR_FONT_SCALE_MAX
+import top.iwesley.lyn.music.core.model.CAR_FONT_SCALE_MIN
+import top.iwesley.lyn.music.core.model.CAR_UI_SCALE_MAX
+import top.iwesley.lyn.music.core.model.CAR_UI_SCALE_MIN
+import top.iwesley.lyn.music.core.model.normalizedCarDisplayValue
+import top.iwesley.lyn.music.core.model.carDisplayModeOrDefault
 import top.iwesley.lyn.music.core.model.AutoOpenPlayerOnStartupPreferencesStore
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
 import top.iwesley.lyn.music.core.model.AudioTagGateway
@@ -101,6 +121,8 @@ import top.iwesley.lyn.music.core.model.AudioTagPatch
 import top.iwesley.lyn.music.core.model.AudioTagSnapshot
 import top.iwesley.lyn.music.core.model.CompactPlayerLyricsPreferencesStore
 import top.iwesley.lyn.music.core.model.DEFAULT_ANDROID_EXTENSION_DECODER_ENABLED
+import top.iwesley.lyn.music.core.model.DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP
+import top.iwesley.lyn.music.core.model.DEFAULT_LIBRARY_SCAN_INCREMENTAL
 import top.iwesley.lyn.music.core.model.DEFAULT_SAMBA_PORT
 import top.iwesley.lyn.music.core.model.DesktopLyricsPosition
 import top.iwesley.lyn.music.core.model.DesktopLyricsPositionPreferencesStore
@@ -109,6 +131,7 @@ import top.iwesley.lyn.music.core.model.DiagnosticLogger
 import top.iwesley.lyn.music.core.model.EmbyCredential
 import top.iwesley.lyn.music.core.model.EmbySourceDraft
 import top.iwesley.lyn.music.core.model.FnMusicSourceDraft
+import top.iwesley.lyn.music.core.model.LibraryScanPreferencesStore
 import top.iwesley.lyn.music.domain.scanFnMusicLibrary
 import top.iwesley.lyn.music.domain.testFnMusicConnection
 import top.iwesley.lyn.music.core.model.GlobalDiagnosticLogger
@@ -375,6 +398,12 @@ private fun createAndroidRuntimeGraph(
     )
     val desktopLyricsPlatformService = AndroidDesktopLyricsPlatformService(context)
     val sharedScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val usbVolumeMonitor = AndroidUsbVolumeMonitor(
+        context = context,
+        activityResumedEvents = activityActions.activityResumedEvents,
+        scope = sharedScope,
+        logger = logger,
+    )
     return try {
         val dateChangeNotifier = AndroidDailyRecommendationDateChangeNotifier(
             context = context,
@@ -387,10 +416,12 @@ private fun createAndroidRuntimeGraph(
             database = database,
             runtimeServices = SharedRuntimeServices(
                 importSourceGateway = AndroidImportSourceGateway(context, activityActions, logger, navidromeHttpClient),
+                usbVolumeEvents = usbVolumeMonitor,
                 secureCredentialStore = secureStore,
                 sambaCachePreferencesStore = appPreferencesStore,
                 themePreferencesStore = appPreferencesStore,
                 appDisplayPreferencesStore = appPreferencesStore,
+                carDisplayPreferencesStore = appPreferencesStore,
                 compactPlayerLyricsPreferencesStore = appPreferencesStore,
                 desktopLyricsPreferencesStore = appPreferencesStore,
                 autoPlayOnStartupPreferencesStore = appPreferencesStore,
@@ -398,6 +429,7 @@ private fun createAndroidRuntimeGraph(
                 navidromeAudioQualityPreferencesStore = appPreferencesStore,
                 playbackDecoderPreferencesStore = appPreferencesStore,
                 playerArtworkStylePreferencesStore = appPreferencesStore,
+                libraryScanPreferencesStore = appPreferencesStore,
                 networkConnectionTypeProvider = networkConnectionTypeProvider,
                 remoteSourceAddressSelector = remoteSourceAddressSelector,
                 librarySourceFilterPreferencesStore = appPreferencesStore,
@@ -448,10 +480,7 @@ private fun createAndroidRuntimeGraph(
                 } else {
                     top.iwesley.lyn.music.core.model.UnsupportedEqualizerPlatformService
                 },
-                castGateway = AndroidUpnpCastGateway(
-                    context = context,
-                    logger = logger,
-                ),
+                castGateway = UnsupportedCastGateway,
                 castMediaUrlResolver = AndroidCastMediaUrlResolver(
                     context = context,
                     database = database,
@@ -693,9 +722,11 @@ internal class AndroidCredentialStore(
 internal class AndroidAppPreferencesStore(
     context: Context,
 ) : AppLanguagePreferencesStore, PlaybackPreferencesStore, SambaCachePreferencesStore, ThemePreferencesStore, AppDisplayPreferencesStore,
+    CarDisplayPreferencesStore,
     CompactPlayerLyricsPreferencesStore, DesktopLyricsPreferencesStore, DesktopLyricsPositionPreferencesStore,
     NavidromeAudioQualityPreferencesStore, LibrarySourceFilterPreferencesStore,
     LyricsShareFontPreferencesStore, PlayerLyricsStylePreferencesStore, PlaybackDecoderPreferencesStore, PlayerArtworkStylePreferencesStore,
+    LibraryScanPreferencesStore,
     AndroidEqualizerPreferencesStore, AutoOpenPlayerOnStartupPreferencesStore {
     private val preferences: SharedPreferences =
         context.getSharedPreferences("lynmusic.settings", Context.MODE_PRIVATE)
@@ -734,6 +765,12 @@ internal class AndroidAppPreferencesStore(
         ),
     )
     private val mutablePlayerArtworkStyle = MutableStateFlow(readPlayerArtworkStyle())
+    private val mutableScanIncremental = MutableStateFlow(
+        preferences.getBoolean(KEY_LIBRARY_SCAN_INCREMENTAL, DEFAULT_LIBRARY_SCAN_INCREMENTAL),
+    )
+    private val mutableAutoScanOnStartup = MutableStateFlow(
+        preferences.getBoolean(KEY_LIBRARY_SCAN_AUTO_ON_STARTUP, DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP),
+    )
     private val mutableEqualizerEnabled = MutableStateFlow(
         preferences.getBoolean(KEY_EQUALIZER_ENABLED, false),
     )
@@ -746,6 +783,20 @@ internal class AndroidAppPreferencesStore(
     private val mutableAppDisplayScalePreset = MutableStateFlow(
         readAppDisplayScalePreset(),
     )
+    private val mutableCarDisplayMode = MutableStateFlow(readCarDisplayMode())
+    private val mutableCarUiScale = MutableStateFlow(readCarScale(KEY_CAR_UI_SCALE, CAR_UI_SCALE_MIN, CAR_UI_SCALE_MAX, DEFAULT_CAR_UI_SCALE))
+    private val mutableCarFontScale = MutableStateFlow(readCarScale(KEY_CAR_FONT_SCALE, CAR_FONT_SCALE_MIN, CAR_FONT_SCALE_MAX, DEFAULT_CAR_FONT_SCALE))
+    private val mutableCarCoverScale = MutableStateFlow(readCarScale(KEY_CAR_COVER_SCALE, CAR_COVER_SCALE_MIN, CAR_COVER_SCALE_MAX, DEFAULT_CAR_COVER_SCALE))
+    private val mutableCarContentMargin = MutableStateFlow(readCarScale(KEY_CAR_CONTENT_MARGIN, CAR_CONTENT_MARGIN_MIN, CAR_CONTENT_MARGIN_MAX, DEFAULT_CAR_CONTENT_MARGIN))
+    private val mutableCarImmersiveMode = MutableStateFlow(
+        preferences.getBoolean(KEY_CAR_IMMERSIVE_MODE, DEFAULT_CAR_IMMERSIVE_MODE),
+    )
+    override val carDisplayMode: StateFlow<CarDisplayMode> = mutableCarDisplayMode.asStateFlow()
+    override val carUiScale: StateFlow<Float> = mutableCarUiScale.asStateFlow()
+    override val carFontScale: StateFlow<Float> = mutableCarFontScale.asStateFlow()
+    override val carCoverScale: StateFlow<Float> = mutableCarCoverScale.asStateFlow()
+    override val carContentMargin: StateFlow<Float> = mutableCarContentMargin.asStateFlow()
+    override val carImmersiveMode: StateFlow<Boolean> = mutableCarImmersiveMode.asStateFlow()
     private val mutableNavidromeWifiAudioQuality = MutableStateFlow(
         readNavidromeAudioQuality(KEY_NAVIDROME_WIFI_AUDIO_QUALITY, NavidromeAudioQuality.Original),
     )
@@ -938,6 +989,19 @@ internal class AndroidAppPreferencesStore(
         mutablePlayerArtworkStyle.value = style
     }
 
+    override val scanIncremental: StateFlow<Boolean> = mutableScanIncremental.asStateFlow()
+    override val autoScanOnStartup: StateFlow<Boolean> = mutableAutoScanOnStartup.asStateFlow()
+
+    override suspend fun setScanIncremental(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_LIBRARY_SCAN_INCREMENTAL, enabled).apply()
+        mutableScanIncremental.value = enabled
+    }
+
+    override suspend fun setAutoScanOnStartup(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_LIBRARY_SCAN_AUTO_ON_STARTUP, enabled).apply()
+        mutableAutoScanOnStartup.value = enabled
+    }
+
     override suspend fun setEqualizerEnabled(enabled: Boolean) {
         preferences.edit().putBoolean(KEY_EQUALIZER_ENABLED, enabled).apply()
         mutableEqualizerEnabled.value = enabled
@@ -962,6 +1026,40 @@ internal class AndroidAppPreferencesStore(
     override suspend fun setAppDisplayScalePreset(preset: AppDisplayScalePreset) {
         preferences.edit().putString(KEY_APP_DISPLAY_SCALE_PRESET, preset.name).apply()
         mutableAppDisplayScalePreset.value = preset
+    }
+
+    override suspend fun setCarDisplayMode(mode: CarDisplayMode) {
+        preferences.edit().putString(KEY_CAR_DISPLAY_MODE, mode.name).apply()
+        mutableCarDisplayMode.value = mode
+    }
+
+    override suspend fun setCarUiScale(scale: Float) {
+        val normalized = normalizedCarDisplayValue(scale, CAR_UI_SCALE_MIN, CAR_UI_SCALE_MAX, DEFAULT_CAR_UI_SCALE)
+        preferences.edit().putFloat(KEY_CAR_UI_SCALE, normalized).apply()
+        mutableCarUiScale.value = normalized
+    }
+
+    override suspend fun setCarFontScale(scale: Float) {
+        val normalized = normalizedCarDisplayValue(scale, CAR_FONT_SCALE_MIN, CAR_FONT_SCALE_MAX, DEFAULT_CAR_FONT_SCALE)
+        preferences.edit().putFloat(KEY_CAR_FONT_SCALE, normalized).apply()
+        mutableCarFontScale.value = normalized
+    }
+
+    override suspend fun setCarCoverScale(scale: Float) {
+        val normalized = normalizedCarDisplayValue(scale, CAR_COVER_SCALE_MIN, CAR_COVER_SCALE_MAX, DEFAULT_CAR_COVER_SCALE)
+        preferences.edit().putFloat(KEY_CAR_COVER_SCALE, normalized).apply()
+        mutableCarCoverScale.value = normalized
+    }
+
+    override suspend fun setCarContentMargin(margin: Float) {
+        val normalized = normalizedCarDisplayValue(margin, CAR_CONTENT_MARGIN_MIN, CAR_CONTENT_MARGIN_MAX, DEFAULT_CAR_CONTENT_MARGIN)
+        preferences.edit().putFloat(KEY_CAR_CONTENT_MARGIN, normalized).apply()
+        mutableCarContentMargin.value = normalized
+    }
+
+    override suspend fun setCarImmersiveMode(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_CAR_IMMERSIVE_MODE, enabled).apply()
+        mutableCarImmersiveMode.value = enabled
     }
 
     override suspend fun setNavidromeWifiAudioQuality(quality: NavidromeAudioQuality) {
@@ -1107,6 +1205,15 @@ internal class AndroidAppPreferencesStore(
 
     private fun readAppDisplayScalePreset(): AppDisplayScalePreset {
         return appDisplayScalePresetOrDefault(preferences.getString(KEY_APP_DISPLAY_SCALE_PRESET, null))
+    }
+
+    private fun readCarDisplayMode(): CarDisplayMode {
+        return carDisplayModeOrDefault(preferences.getString(KEY_CAR_DISPLAY_MODE, null))
+    }
+
+    private fun readCarScale(key: String, min: Float, max: Float, fallback: Float): Float {
+        val stored = preferences.getFloat(key, fallback)
+        return normalizedCarDisplayValue(stored, min, max, fallback)
     }
 
     private fun readNavidromeAudioQuality(
@@ -1498,6 +1605,7 @@ class AndroidLocalFolderPicker(
         activity.lifecycleScope.launch {
             val selection = if (result.resultCode == Activity.RESULT_OK) {
                 AndroidLocalFolderPickerActivity.selectionFromResult(result.data)
+                    ?.withAndroidUsbVolumeReference(activity, logger)
             } else {
                 null
             }
@@ -1696,6 +1804,14 @@ private class AndroidImportSourceGateway(
         sourceId: String,
         progressSink: ImportScanProgressSink,
     ): ImportScanReport {
+        // USB 卷身份引用:解析 volumeKey 并映射到当前挂载点后扫描,换挂载点不重复建源。
+        parseUsbLocalFolderReference(selection.persistentReference)?.let { usbReference ->
+            return scanAndroidUsbVolumeFolder(
+                usbReference = usbReference,
+                sourceId = sourceId,
+                progressSink = progressSink,
+            )
+        }
         val directLocalFileAccess = hasDirectLocalFileAccess(context)
         resolveAndroidLocalTrackFile(selection.persistentReference)
             ?.takeIf { it.isDirectory }
@@ -1703,16 +1819,30 @@ private class AndroidImportSourceGateway(
                 val canScanDirectly = directLocalFileAccess || isWithinReadableAndroidUsbStorageRoot(context, root, logger)
                 if (canScanDirectly) {
                     val branch = if (directLocalFileAccess) "direct-permission" else "usb-readable-root"
-                    return scanLocalDirectoryWithLogging(
+                    val report = scanLocalDirectoryWithLogging(
                         root = root,
                         sourceId = sourceId,
                         branch = branch,
                         progressSink = progressSink,
                     )
+                    if (report.tracks.isNotEmpty() || report.discoveredAudioFileCount > 0) {
+                        return report
+                    }
+                    // 直扫为空时用系统媒体库兜底(第三种读取方案)。
+                    val mediaStoreReport = scanAndroidMediaStoreAudioUnderRoot(context, root, sourceId, progressSink, logger)
+                    if (mediaStoreReport.tracks.isNotEmpty()) {
+                        return mediaStoreReport
+                    }
+                    return report
                 }
                 logger.warn(LOCAL_IMPORT_LOG_TAG) {
                     "direct-path-scan-denied source=$sourceId root=${root.absolutePath} " +
                         "directLocalFileAccess=$directLocalFileAccess"
+                }
+                // 根不可读但系统媒体库可见时,以 content:// URI 导入。
+                val mediaStoreReport = scanAndroidMediaStoreAudioUnderRoot(context, root, sourceId, progressSink, logger)
+                if (mediaStoreReport.tracks.isNotEmpty()) {
+                    return mediaStoreReport
                 }
             }
         val treeUri = Uri.parse(selection.persistentReference)
@@ -2169,6 +2299,66 @@ private class AndroidImportSourceGateway(
                     "elapsedMs=${System.currentTimeMillis() - startedAt}"
             }
         }.getOrThrow()
+    }
+
+    /**
+     * Scans a USB root reference: the stored volumeKey is matched against currently mounted removable
+     * volumes and the stored volume-relative path is re-anchored onto the current mount point, so a
+     * re-plugged stick rescans the same source instead of creating a duplicate one. When the direct
+     * filesystem read is not possible or yields nothing, the system media library backs the scan with
+     * content:// locators. An unmounted volume keeps the source's stored tracks and reports why.
+     */
+    private suspend fun scanAndroidUsbVolumeFolder(
+        usbReference: UsbLocalFolderReference,
+        sourceId: String,
+        progressSink: ImportScanProgressSink,
+    ): ImportScanReport {
+        val volume = resolveAndroidUsbVolume(context, usbReference.volumeKey, logger)
+        if (volume == null) {
+            logger.warn(LOCAL_IMPORT_LOG_TAG) {
+                "usb-volume-scan-unavailable source=$sourceId volumeKey=${usbReference.volumeKey}"
+            }
+            throw UiTextException(uiText(Res.string.import_usb_volume_unavailable))
+        }
+        val root = if (usbReference.volumeRelativePath.isBlank()) {
+            volume.root
+        } else {
+            File(volume.root, usbReference.volumeRelativePath)
+        }
+        logger.info(LOCAL_IMPORT_LOG_TAG) {
+            "usb-volume-scan-resolved source=$sourceId volumeKey=${usbReference.volumeKey} " +
+                "volumeRoot=${volume.root.absolutePath} root=${root.absolutePath}"
+        }
+        val canScanDirectly = hasDirectLocalFileAccess(context) ||
+            isWithinReadableAndroidUsbStorageRoot(context, root, logger)
+        if (canScanDirectly && root.isDirectory) {
+            val report = scanLocalDirectoryWithLogging(
+                root = root,
+                sourceId = sourceId,
+                branch = "usb-volume",
+                progressSink = progressSink,
+            )
+            if (report.tracks.isNotEmpty() || report.discoveredAudioFileCount > 0) {
+                return report
+            }
+            val mediaStoreReport = scanAndroidMediaStoreAudioUnderRoot(context, root, sourceId, progressSink, logger)
+            if (mediaStoreReport.tracks.isNotEmpty()) {
+                return mediaStoreReport
+            }
+            return report
+        }
+        if (root.isDirectory) {
+            // Root exists but direct reads are denied; the media library can still supply the files.
+            val mediaStoreReport = scanAndroidMediaStoreAudioUnderRoot(context, root, sourceId, progressSink, logger)
+            if (mediaStoreReport.tracks.isNotEmpty()) {
+                return mediaStoreReport
+            }
+        }
+        logger.warn(LOCAL_IMPORT_LOG_TAG) {
+            "usb-volume-scan-denied source=$sourceId root=${root.absolutePath} " +
+                "directLocalFileAccess=${hasDirectLocalFileAccess(context)}"
+        }
+        throw UiTextException(uiText(Res.string.import_usb_volume_unavailable))
     }
 
     private fun walkDocumentTree(
@@ -2794,7 +2984,11 @@ internal class AndroidPlaybackGateway(
                 return
             }
             mutableState.update {
-                it.withAndroidPlaybackFailure(error).copy(isPlaying = false)
+                it.withAndroidPlaybackFailure(
+                    error = error,
+                    context = context,
+                    mediaUri = player.currentMediaItem?.localConfiguration?.uri,
+                ).copy(isPlaying = false)
             }
         }
 
@@ -3705,7 +3899,15 @@ private const val KEY_AUTO_PLAY_ON_STARTUP = "auto_play_on_startup"
 private const val KEY_AUTO_OPEN_PLAYER_ON_STARTUP = "auto_open_player_on_startup"
 private const val KEY_ANDROID_EXTENSION_DECODER_ENABLED = "android_extension_decoder_enabled"
 private const val KEY_PLAYER_ARTWORK_STYLE = "player_artwork_style"
+private const val KEY_LIBRARY_SCAN_INCREMENTAL = "library_scan_incremental"
+private const val KEY_LIBRARY_SCAN_AUTO_ON_STARTUP = "library_scan_auto_on_startup"
 private const val KEY_APP_DISPLAY_SCALE_PRESET = "app_display_scale_preset"
+private const val KEY_CAR_DISPLAY_MODE = "car_display_mode"
+private const val KEY_CAR_UI_SCALE = "car_ui_scale"
+private const val KEY_CAR_FONT_SCALE = "car_font_scale"
+private const val KEY_CAR_COVER_SCALE = "car_cover_scale"
+private const val KEY_CAR_CONTENT_MARGIN = "car_content_margin"
+private const val KEY_CAR_IMMERSIVE_MODE = "car_immersive_mode"
 private const val KEY_NAVIDROME_WIFI_AUDIO_QUALITY = "navidrome_wifi_audio_quality"
 private const val KEY_NAVIDROME_MOBILE_AUDIO_QUALITY = "navidrome_mobile_audio_quality"
 private const val KEY_LYRICS_SHARE_FONT_KEY = "lyrics_share_font_key"

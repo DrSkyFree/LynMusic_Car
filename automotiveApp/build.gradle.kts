@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val sharedVersionConfig = rootProject.readSharedVersionConfig()
 val appVersionName = sharedVersionConfig.getValue("APP_VERSION_NAME")
-val androidArtifactBaseName = "LynMusic-Car-$appVersionName"
+val androidArtifactBaseName = "LynMusic_Car-$appVersionName"
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -21,10 +21,6 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = sharedVersionConfig.getValue("APP_VERSION_CODE").toInt()
         versionName = appVersionName
-    }
-
-    sourceSets.getByName("main") {
-        res.directories.add(rootProject.file("androidApp/src/main/res").path)
     }
 
     buildFeatures {
@@ -53,7 +49,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a")
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = true
         }
     }

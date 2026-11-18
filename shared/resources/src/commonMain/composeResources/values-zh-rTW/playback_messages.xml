@@ -23,6 +23,7 @@
     <string name="playback_vlc_initializing">正在初始化 VLC，使用者也可能尚未安裝 VLC 播放器…</string>
     <string name="playback_media_failed">桌面播放器無法播放目前媒體。</string>
     <string name="playback_access_failed">存取歌曲失敗：%1$s</string>
+    <string name="playback_usb_unavailable">USB 隨身碟已拔除或無法存取，相關歌曲暫時無法播放。</string>
     <string name="playback_unknown_error">未知錯誤</string>
     <plurals name="cast_devices_found">
         <item quantity="one">找到 %1$s 台裝置</item>

@@ -183,6 +183,7 @@ internal fun PlayerDrawerHost(
     appDisplayScalePreset: AppDisplayScalePreset,
     showCompactPlayerLyrics: Boolean,
     playerArtworkStyle: PlayerArtworkStyle,
+    carCoverScale: Float = 1f,
     showEqualizerEntry: Boolean,
     onOpenEqualizer: () -> Unit,
     lyricsShareThemeTokens: AppThemeTokens,
@@ -236,6 +237,7 @@ internal fun PlayerDrawerHost(
                 appDisplayScalePreset = appDisplayScalePreset,
                 showCompactPlayerLyrics = showCompactPlayerLyrics,
                 playerArtworkStyle = playerArtworkStyle,
+                carCoverScale = carCoverScale,
                 showEqualizerEntry = showEqualizerEntry,
                 onOpenEqualizer = onOpenEqualizer,
                 lyricsShareThemeTokens = lyricsShareThemeTokens,
@@ -267,6 +269,7 @@ internal fun MiniPlayerBarVisibility(
     mobile: Boolean = false,
     mobilePortraitMiniPlayer: Boolean = false,
     glassStyle: MiniPlayerGlassStyle? = null,
+    carCoverScale: Float = 1f,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -310,6 +313,7 @@ internal fun MiniPlayerBarVisibility(
                 mobile = mobile,
                 mobilePortraitMiniPlayer = mobilePortraitMiniPlayer,
                 glassStyle = glassStyle,
+                carCoverScale = carCoverScale,
             )
         }
         if (glassStyle != null) {
@@ -491,6 +495,7 @@ private fun MiniPlayerBar(
     mobile: Boolean = false,
     mobilePortraitMiniPlayer: Boolean = false,
     glassStyle: MiniPlayerGlassStyle? = null,
+    carCoverScale: Float = 1f,
 ) {
     val snapshot = state.effectiveSnapshot
     if (snapshot.currentTrack == null) {
@@ -506,6 +511,7 @@ private fun MiniPlayerBar(
             lyricsText = miniPlayerLyricsText,
             showPortraitLyrics = mobilePortraitMiniPlayer,
             glassStyle = glassStyle,
+            carCoverScale = carCoverScale,
             onPlayerIntent = onPlayerIntent,
             onOpenQueue = onOpenQueue,
         )
@@ -517,6 +523,7 @@ private fun MiniPlayerBar(
         isFavorite = isFavorite,
         canToggleFavorite = canToggleFavorite,
         onToggleFavorite = onToggleFavorite,
+        carCoverScale = carCoverScale,
         onPlayerIntent = onPlayerIntent,
         onOpenQueue = onOpenQueue,
     )
@@ -547,6 +554,7 @@ private fun AutomotiveLandscapeMiniPlayerBar(
     isFavorite: Boolean,
     canToggleFavorite: Boolean,
     onToggleFavorite: () -> Unit,
+    carCoverScale: Float = 1f,
     onPlayerIntent: (PlayerIntent) -> Unit,
     onOpenQueue: () -> Unit,
 ) {
@@ -678,7 +686,7 @@ private fun AutomotiveLandscapeMiniPlayerBar(
                 )
             }
             VinylPlaceholder(
-                vinylSize = 52.dp,
+                vinylSize = 52.dp * carCoverScale,
                 artworkLocator = snapshot.currentDisplayArtworkLocator,
                 artworkCacheKey = snapshot.currentTrack?.let(::trackArtworkCacheKey),
                 spinning = snapshot.isPlaying,
@@ -748,6 +756,7 @@ private fun MobileMiniPlayerBar(
     onPlayerIntent: (PlayerIntent) -> Unit,
     onOpenQueue: () -> Unit,
     glassStyle: MiniPlayerGlassStyle? = null,
+    carCoverScale: Float = 1f,
 ) {
     val presentation = currentPlayerPresentation()
     val shape = if (glassStyle != null) RoundedCornerShape(50) else RoundedCornerShape(26.dp)
@@ -819,7 +828,7 @@ private fun MobileMiniPlayerBar(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             VinylPlaceholder(
-                vinylSize = 46.dp,
+                vinylSize = 46.dp * carCoverScale,
                 artworkLocator = snapshot.currentDisplayArtworkLocator,
                 artworkCacheKey = snapshot.currentTrack?.let(::trackArtworkCacheKey),
                 spinning = snapshot.isPlaying,
@@ -954,10 +963,11 @@ internal fun resolvePlayerInfoVinylSize(
     maxHeight: Dp,
     compact: Boolean,
     hasCompactLyrics: Boolean,
+    coverScale: Float = 1f,
 ): Dp {
-    return if (compact) {
+    val heightReserve = 32.dp
+    val baseSize = if (compact) {
         val widthBound = maxWidth * 0.90f //if (hasCompactLyrics) 0.90f else 0.90f
-        val heightReserve = 32.dp //if (hasCompactLyrics) 32.dp else 32.dp
         val heightBound = (maxHeight - heightReserve).coerceAtLeast(180.dp)
         minOf(widthBound, heightBound).coerceIn(
             minimumValue = 220.dp,
@@ -969,6 +979,15 @@ internal fun resolvePlayerInfoVinylSize(
             maximumValue = 400.dp,
         )
     }
+    // Cover scale (0.6~1.3) grows the artwork but never past the available pane, so titles,
+    // compact lyrics and the bottom controls stay visible.
+    val scaledSize = baseSize * coverScale
+    val availableSize = if (compact) {
+        minOf(maxWidth, (maxHeight - heightReserve).coerceAtLeast(180.dp))
+    } else {
+        minOf(maxWidth, maxHeight)
+    }
+    return scaledSize.coerceAtMost(availableSize)
 }
 
 internal fun resolvePlayerArtworkDragOffsetPx(
@@ -1078,6 +1097,7 @@ private fun PlayerOverlay(
     appDisplayScalePreset: AppDisplayScalePreset,
     showCompactPlayerLyrics: Boolean,
     playerArtworkStyle: PlayerArtworkStyle,
+    carCoverScale: Float = 1f,
     showEqualizerEntry: Boolean,
     onOpenEqualizer: () -> Unit,
     lyricsShareThemeTokens: AppThemeTokens,
@@ -1277,6 +1297,7 @@ private fun PlayerOverlay(
                     track = track,
                     artworkBitmap = paletteArtworkBitmap,
                     appDisplayScalePreset = appDisplayScalePreset,
+                    carCoverScale = carCoverScale,
                     isPureMode = isPureMode,
                     playerArtworkStyle = playerArtworkStyle,
                     isFavorite = isFavorite,
@@ -1353,6 +1374,7 @@ private fun PlayerOverlay(
                         artworkBitmap = null,
                         showCompactPlayerLyrics = showCompactPlayerLyrics,
                         playerArtworkStyle = playerArtworkStyle,
+                        carCoverScale = carCoverScale,
                         onPlayerIntent = onPlayerIntent,
                         modifier = Modifier
                             .weight(1f)
@@ -1511,6 +1533,7 @@ private fun AutomotivePortraitPlayerPane(
     artworkBitmap: ImageBitmap?,
     showCompactPlayerLyrics: Boolean,
     playerArtworkStyle: PlayerArtworkStyle,
+    carCoverScale: Float = 1f,
     onPlayerIntent: (PlayerIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1544,6 +1567,7 @@ private fun AutomotivePortraitPlayerPane(
                 track = track,
                 artworkBitmap = artworkBitmap,
                 playerArtworkStyle = playerArtworkStyle,
+                carCoverScale = carCoverScale,
                 modifier = Modifier.fillMaxSize(),
                 compact = true,
                 compactLyricsText = displayCompactLyricsText,
@@ -1580,6 +1604,7 @@ private fun PlayerInfoPane(
     track: Track,
     artworkBitmap: ImageBitmap? = null,
     playerArtworkStyle: PlayerArtworkStyle,
+    carCoverScale: Float = 1f,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     compactLyricsText: String? = null,
@@ -1592,12 +1617,13 @@ private fun PlayerInfoPane(
         contentAlignment = Alignment.Center,
     ) {
         val hasCompactLyrics = compact && !compactLyricsText.isNullOrBlank()
-        val vinylSize = remember(maxWidth, maxHeight, compact, hasCompactLyrics) {
+        val vinylSize = remember(maxWidth, maxHeight, compact, hasCompactLyrics, carCoverScale) {
             resolvePlayerInfoVinylSize(
                 maxWidth = maxWidth,
                 maxHeight = maxHeight,
                 compact = compact,
                 hasCompactLyrics = hasCompactLyrics,
+                coverScale = carCoverScale,
             )
         }
         val compactLyricsAreaTopOffset = ((maxHeight - vinylSize) / 2) + vinylSize

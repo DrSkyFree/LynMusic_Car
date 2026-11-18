@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
 import android.util.DisplayMetrics
+import android.view.View
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,11 +37,11 @@ import top.iwesley.lyn.music.LynMusicAppComponent
 import top.iwesley.lyn.music.StartupAutoOpenGate
 import top.iwesley.lyn.music.automotive.ui.StartupDatabaseErrorScreen
 import top.iwesley.lyn.music.buildPlayerAppComponent
-import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
+import top.iwesley.lyn.music.core.model.CarDisplayMode
 import top.iwesley.lyn.music.feature.player.PlayerIntent
 import top.iwesley.lyn.music.feature.settings.SettingsIntent
 import top.iwesley.lyn.music.platform.AndroidExternalAudioOpenSupport
-import top.iwesley.lyn.music.platform.androidAppDisplayDensity
+import top.iwesley.lyn.music.platform.applyCarImmersiveMode
 import top.iwesley.lyn.music.platform.createAndroidRuntimeGraph
 import kotlin.math.roundToInt
 
@@ -50,11 +52,12 @@ class MainActivity : ComponentActivity() {
     private var pendingExternalAudioOpenIntent: Intent? = null
     private var externalAudioOpenJob: Job? = null
     private var externalAudioOpenRequestId = 0L
+    private var currentImmersiveMode = false
+    private val carDisplayObservationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         //enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         val appComponentResult = runCatching {
             val runtimeGraph = createAndroidRuntimeGraph(this, platformName = ANDROID_AUTOMOTIVE_PLATFORM_NAME)
             try {
@@ -70,14 +73,22 @@ class MainActivity : ComponentActivity() {
             }
         }
         appComponent = appComponentResult.getOrNull()
+        applyCarDisplayOrientation(appComponentResult.getOrNull()?.carDisplayMode?.value)
+        applyCarImmersiveMode(
+            window,
+            appComponentResult.getOrNull()?.carImmersiveMode?.value == true,
+        )
+        observeCarDisplayModeRestart(appComponentResult.getOrNull())
+        observeCarImmersiveMode(appComponentResult.getOrNull())
         handleExternalAudioOpenIntent(intent)
 
         setContent {
             ProvideUiLanguage {
                 val appComponent = appComponentResult.getOrNull()
                 if (appComponent != null) {
-                    val appDisplayScalePreset by appComponent.appDisplayScalePreset.collectAsState()
-                    ProvideFixedAndroidComposeDensity(appDisplayScalePreset = appDisplayScalePreset) {
+                    val carUiScale by appComponent.carUiScale.collectAsState()
+                    val carFontScale by appComponent.carFontScale.collectAsState()
+                    ProvideCarDisplayDensity(carUiScale = carUiScale, carFontScale = carFontScale) {
                         AutomotiveApp(
                             component = appComponent,
                             startupAutoOpenGate = startupAutoOpenViewModel.gate,
@@ -104,11 +115,75 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         appComponent?.settingsStore?.dispatch(SettingsIntent.RecheckDesktopLyricsPermission)
+        // 个别车机会在恢复前台时重置窗口 flag,重新隐藏系统栏
+        applyCarImmersiveMode(window, currentImmersiveMode)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applyCarImmersiveMode(window, currentImmersiveMode)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         externalAudioOpenScope.cancel()
+        carDisplayObservationScope.cancel()
+    }
+
+    private fun applyCarDisplayOrientation(mode: CarDisplayMode?) {
+        requestedOrientation = when (mode) {
+            CarDisplayMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            CarDisplayMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        }
+    }
+
+    // 「使用设备」切换后自动重启套用:生效模式是进程启动时的快照,运行期收到不同值即代表用户改了设置。
+    private fun observeCarDisplayModeRestart(component: LynMusicAppComponent?) {
+        if (component == null) return
+        carDisplayObservationScope.launch {
+            var effectiveModeSeen = false
+            component.carDisplayMode.collect { mode ->
+                if (!effectiveModeSeen) {
+                    effectiveModeSeen = true
+                    return@collect
+                }
+                triggerCarDisplayRestart()
+            }
+        }
+    }
+
+    // 全屏模式实时生效 + 重新 attach 时重套(个别车机在窗口重排后会复位 flag)
+    private fun observeCarImmersiveMode(component: LynMusicAppComponent?) {
+        if (component == null) return
+        currentImmersiveMode = component.carImmersiveMode.value
+        carDisplayObservationScope.launch {
+            component.carImmersiveMode.collect { enabled ->
+                currentImmersiveMode = enabled
+                applyCarImmersiveMode(window, enabled)
+            }
+        }
+        window.decorView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                applyCarImmersiveMode(window, currentImmersiveMode)
+            }
+
+            override fun onViewDetachedFromWindow(v: View) {}
+        })
+    }
+
+    private fun triggerCarDisplayRestart() {
+        val mainIntent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        }
+        startActivity(
+            Intent(this, CarRestartActivity::class.java).apply {
+                putExtra(CarRestartActivity.EXTRA_OLD_PID, Process.myPid())
+                putExtra(CarRestartActivity.EXTRA_MAIN_INTENT, mainIntent)
+            },
+        )
     }
 
     private fun handleExternalAudioOpenIntent(intent: Intent?) {
@@ -143,21 +218,23 @@ internal class StartupAutoOpenViewModel : ViewModel() {
 }
 
 @Composable
-private fun ProvideFixedAndroidComposeDensity(
-    appDisplayScalePreset: AppDisplayScalePreset,
+private fun ProvideCarDisplayDensity(
+    carUiScale: Float,
+    carFontScale: Float,
     content: @Composable () -> Unit,
 ) {
     val currentDensity = LocalDensity.current
-    val fixedDensity = remember(currentDensity.density, currentDensity.fontScale, appDisplayScalePreset) {
+    val fixedDensity = remember(currentDensity.density, currentDensity.fontScale, carUiScale, carFontScale) {
         Density(
-            density = androidAppDisplayDensity(currentDensity.density, appDisplayScalePreset),
-            fontScale = currentDensity.fontScale,
+            density = currentDensity.density * carUiScale,
+            fontScale = currentDensity.fontScale * carFontScale,
         )
     }
     CompositionLocalProvider(LocalDensity provides fixedDensity) {
         content()
     }
 }
+
 
 private fun ComponentActivity.isTabletIgnoringDisplaySize(): Boolean {
     val (widthPx, heightPx) = currentDisplayPx()

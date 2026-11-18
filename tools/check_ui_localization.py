@@ -88,8 +88,8 @@ for locale in LOCALES:
     catalogs[locale] = catalog
 
 # Handwritten Android resources follow the same naming rule as the shared XML.
-for relative in ("androidApp/src/main/res", "android/runtime/src/main/res",
-                 "tvApp/src/main/res", "automotiveApp/src/main/res"):
+for relative in ("android/runtime/src/main/res",
+                 "automotiveApp/src/main/res"):
     for path in (ROOT / relative).glob("values*/*.xml"):
         for element in ET.parse(path).getroot():
             if element.tag in {"string", "string-array", "plurals"}:
@@ -110,11 +110,11 @@ for locale in LOCALES[1:]:
                 errors.append(f"{locale}: {key}/{quantity} argument number/type differs")
 
 # Static key references, including non-Compose business messages.
-for module in ("player", "shared", "app", "ui", "composeApp", "androidApp", "android", "tvApp", "automotiveApp", "cast"):
+for module in ("player", "shared", "app", "ui", "android", "automotiveApp", "cast"):
     for path in (ROOT / module).rglob("*.kt"):
         if "build" in path.parts or any(part.endswith("Test") for part in path.parts):
             continue
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         for kind, key in re.findall(r'\bRes\.(string|plurals)\.([a-z0-9_]+)', source):
             if key not in base:
                 errors.append(f"{path.relative_to(ROOT)}: missing resource {key}")
@@ -130,45 +130,30 @@ allowed_diagnostics = {
     "ArtworkBitmap.jvm.kt": {"远端封面读取失败。"},
     "LibraryNavigation.kt": {"在线导航目标应在本地导航解析前处理。"},
     "AndroidOfflineDownloadGateway.kt": {"离线文件不存在。"},
-    "JvmOfflineDownloadGateway.kt": {"离线文件不存在。"},
     "OfflineDownloadRepositories.kt": {"上次下载未完成。", "下载失败。", "离线文件不存在。"},
     "AndroidWebDavSupport.kt": {"读取失败。"},
-    "JvmWebDavSupport.kt": {"读取失败。"},
     "AndroidDesktopLyricsOverlayService.kt": {"保存桌面歌词位置失败。"},
 }
 ui_paths = []
 ui_paths += [p for p in (ROOT / "ui").rglob("*.kt")
              if "build" not in p.parts and any(part.endswith("Main") for part in p.parts)]
-ui_paths += [p for p in (ROOT / "tvApp/src/main").rglob("*.kt")
-             if p.name.endswith(("Activity.kt", "Screen.kt", "Overlay.kt", "List.kt"))]
 ui_paths += [ROOT / "android/runtime/src/main/kotlin/top/iwesley/lyn/music/platform" / name
              for name in ("AndroidEqualizerActivity.kt", "AndroidLocalFolderPickerActivity.kt", "AndroidWebDavSupport.kt", "AndroidAudioTagEditorPlatformService.kt", "AndroidSambaSupport.kt", "AndroidPlaybackErrorText.kt")]
-ui_paths += [ROOT / "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music" / name
-             for name in ("JvmDesktopStartingScreen.kt", "JvmCrashReporter.kt")]
 ui_paths += [ROOT / "cast/api/src/commonMain/kotlin/top/iwesley/lyn/music/cast/CastModels.kt"]
-ui_paths += [ROOT / "cast/upnp/android/src/main/kotlin/top/iwesley/lyn/music/cast/upnp/android" / name
-             for name in ("AndroidUpnpCastGateway.kt", "NativeCastErrorText.kt", "AndroidUpnpMediaRenderer.kt", "NativeRendererErrorText.kt")]
 ui_paths += [ROOT / path for path in (
     "shared/core/src/commonMain/kotlin/top/iwesley/lyn/music/core/model/OfflineDownloadFailureText.kt",
     "shared/core/src/commonMain/kotlin/top/iwesley/lyn/music/core/model/WebDav.kt",
     "shared/core/src/commonMain/kotlin/top/iwesley/lyn/music/core/model/SambaUiText.kt",
     "shared/data/src/commonMain/kotlin/top/iwesley/lyn/music/platform/SambaPlaybackSupport.kt",
     "shared/data/src/commonMain/kotlin/top/iwesley/lyn/music/data/repository/OfflineDownloadRepositories.kt",
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmOfflineDownloadGateway.kt",
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmWebDavSupport.kt",
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmSambaSupport.kt",
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmLyricsShareFontLibraryPlatformService.kt",
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmNativeFilePicker.kt",
-    "tvApp/src/main/kotlin/top/iwesley/lyn/music/tv/TvRendererActivityPlaybackSession.kt",
     "android/runtime/src/main/kotlin/top/iwesley/lyn/music/platform/AndroidOfflineDownloadGateway.kt",
     "android/runtime/src/main/kotlin/top/iwesley/lyn/music/platform/AndroidDesktopLyricsOverlayService.kt",
     "android/runtime/src/main/kotlin/top/iwesley/lyn/music/platform/AndroidDesktopLyricsLanguageRefresh.kt",
     "android/runtime/src/main/kotlin/top/iwesley/lyn/music/platform/SambaCastProxyResource.kt",
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/VlcSupport.kt",
     "shared/data/src/commonMain/kotlin/top/iwesley/lyn/music/domain/WorkflowLyricsEngine.kt",
 )]
 for path in ui_paths:
-    source = path.read_text()
+    source = path.read_text(encoding="utf-8")
     # Enum entries live for the process lifetime; only resource keys may be cached there.
     for entries in re.findall(r'enum\s+class\s+\w+\s*(?:\([^{}]*\))?\s*\{([^;{}]*)(?:;|\})', source, re.S):
         if re.search(r'\b(?:uiString|nativeUiString|resolveUiText)\s*\(', entries):
@@ -178,64 +163,12 @@ for path in ui_paths:
             errors.append(f"{path.relative_to(ROOT)}:{source.count(chr(10), 0, start) + 1}: hardcoded UI text {template}")
 
 # Connection-test failures are displayed directly; other platform sections include excluded logs and metadata.
-for relative_path in (
-    "android/runtime/src/main/kotlin/top/iwesley/lyn/music/platform/AndroidPlatform.kt",
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmPlatform.kt",
-):
-    source = (ROOT / relative_path).read_text()
-    start = source.index("override suspend fun testSamba(")
-    end = source.index("override suspend fun scanSamba(", start)
-    for offset, _, template, _, _ in literals(source[start:end]):
-        errors.append(f"{relative_path}:{source.count(chr(10), 0, start + offset) + 1}: hardcoded Samba connection UI text {template}")
-
-# Check desktop display boundaries without including migration diagnostics or user metadata.
-desktop_ui_sections = {
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmPlatform.kt": (
-        ("override suspend fun pickArtworkBytes(", "override suspend fun loadArtworkBytes("),
-        ("private class JvmVlcPathPickerPlatformService", "private fun resolveJvmLocalTrackPath("),
-        ("override suspend fun pickLocalFolder(", "override suspend fun scanLocalFolder("),
-    ),
-    "composeApp/src/jvmMain/kotlin/top/iwesley/lyn/music/platform/JvmDataLocation.kt": (
-        ("suspend fun scheduleChange(", "suspend fun applyPendingChange("),
-        ("private fun validateTargetTopology(", "private fun validateSourceDatabaseCollection("),
-        ("private fun validateSourceOwnership(", "private fun requireRootIdentity("),
-        ("private fun ensureActiveRootIdentity(", "private fun copyNonDatabaseFiles("),
-        ("internal class JvmAppDataLocationPlatformService", "internal fun isJvmWindowsOs("),
-    ),
-}
-for relative_path, sections in desktop_ui_sections.items():
-    source = (ROOT / relative_path).read_text()
-    for start_marker, end_marker in sections:
-        start = source.index(start_marker)
-        end = source.index(end_marker, start)
-        for offset, _, template, _, _ in literals(source[start:end]):
-            errors.append(f"{relative_path}:{source.count(chr(10), 0, start + offset) + 1}: hardcoded desktop UI text {template}")
-
-# Application-generated JNI errors use resource IDs rather than translated diagnostic strings.
-cast_native_source = (ROOT / "cast/upnp/android/src/main/cpp/lyn_upnp_cast_jni.cpp").read_text()
-native_cast_keys = set(re.findall(r'"lyn_ui:(cast_[a-z0-9_]+)"', cast_native_source))
-cast_adapter_source = (ROOT / "cast/upnp/android/src/main/kotlin/top/iwesley/lyn/music/cast/upnp/android/NativeCastErrorText.kt").read_text()
-adapter_keys_block = re.search(r'nativeCastErrorResources\s*=\s*mapOf\((.*?)\)', cast_adapter_source, re.S)
-adapter_cast_keys = set(re.findall(r'"(cast_[a-z0-9_]+)"', adapter_keys_block.group(1))) if adapter_keys_block else set()
-if not native_cast_keys or native_cast_keys != adapter_cast_keys:
-    errors.append("cast: JNI error IDs and the UI adapter allowlist differ")
-for key in native_cast_keys:
-    if key not in base:
-        errors.append(f"cast: missing native error resource {key}")
-
-renderer_native_source = (ROOT / "cast/upnp/android/src/main/cpp/lyn_upnp_renderer_jni.cpp").read_text()
-native_renderer_keys = set(re.findall(r'"lyn_ui:(renderer_[a-z0-9_]+)"', renderer_native_source))
-renderer_adapter_source = (ROOT / "cast/upnp/android/src/main/kotlin/top/iwesley/lyn/music/cast/upnp/android/NativeRendererErrorText.kt").read_text()
-renderer_keys_block = re.search(r'nativeRendererErrorResources\s*=\s*mapOf\((.*?)\)', renderer_adapter_source, re.S)
-adapter_renderer_keys = set(re.findall(r'"(renderer_[a-z0-9_]+)"', renderer_keys_block.group(1))) if renderer_keys_block else set()
-if not native_renderer_keys or native_renderer_keys != adapter_renderer_keys:
-    errors.append("renderer: JNI error IDs and the UI adapter allowlist differ")
-for key in native_renderer_keys:
-    if key not in base:
-        errors.append(f"renderer: missing native error resource {key}")
-for message in re.findall(r'(?:return\s+|Error\(env,\s*)"([^"\n]+)"', renderer_native_source):
-    if HAN.search(message):
-        errors.append("renderer: native source still contains hardcoded Chinese errors")
+relative_path = "android/runtime/src/main/kotlin/top/iwesley/lyn/music/platform/AndroidPlatform.kt"
+source = (ROOT / relative_path).read_text(encoding="utf-8")
+start = source.index("override suspend fun testSamba(")
+end = source.index("override suspend fun scanSamba(", start)
+for offset, _, template, _, _ in literals(source[start:end]):
+    errors.append(f"{relative_path}:{source.count(chr(10), 0, start + offset) + 1}: hardcoded Samba connection UI text {template}")
 
 if errors:
     print("\n".join(errors))

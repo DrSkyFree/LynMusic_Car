@@ -38,6 +38,15 @@ import top.iwesley.lyn.music.core.model.AppStorageSnapshot
 import top.iwesley.lyn.music.core.model.AppDataLocationChangeMode
 import top.iwesley.lyn.music.core.model.AppDataLocationPlatformService
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
+import top.iwesley.lyn.music.core.model.CarDisplayMode
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_CONTENT_MARGIN
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_COVER_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_DISPLAY_MODE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_FONT_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_IMMERSIVE_MODE
+import top.iwesley.lyn.music.core.model.DEFAULT_CAR_UI_SCALE
+import top.iwesley.lyn.music.core.model.DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP
+import top.iwesley.lyn.music.core.model.DEFAULT_LIBRARY_SCAN_INCREMENTAL
 import top.iwesley.lyn.music.core.model.AppLanguage
 import top.iwesley.lyn.music.core.model.AppThemeId
 import top.iwesley.lyn.music.core.model.AppThemeTextPalette
@@ -2287,7 +2296,23 @@ private class FakeSettingsRepository(
     override val useAndroidExtensionDecoder: StateFlow<Boolean> =
         mutableUseAndroidExtensionDecoder.asStateFlow()
     override val playerArtworkStyle: StateFlow<PlayerArtworkStyle> = mutablePlayerArtworkStyle.asStateFlow()
+    private val mutableScanIncremental = MutableStateFlow(DEFAULT_LIBRARY_SCAN_INCREMENTAL)
+    override val scanIncremental: StateFlow<Boolean> = mutableScanIncremental.asStateFlow()
+    private val mutableAutoScanOnStartup = MutableStateFlow(DEFAULT_LIBRARY_SCAN_AUTO_ON_STARTUP)
+    override val autoScanOnStartup: StateFlow<Boolean> = mutableAutoScanOnStartup.asStateFlow()
     override val appDisplayScalePreset: StateFlow<AppDisplayScalePreset> = mutableAppDisplayScalePreset.asStateFlow()
+    private val mutableCarDisplayMode = MutableStateFlow(DEFAULT_CAR_DISPLAY_MODE)
+    override val carDisplayMode: StateFlow<CarDisplayMode> = mutableCarDisplayMode
+    private val mutableCarUiScale = MutableStateFlow(DEFAULT_CAR_UI_SCALE)
+    override val carUiScale: StateFlow<Float> = mutableCarUiScale
+    private val mutableCarFontScale = MutableStateFlow(DEFAULT_CAR_FONT_SCALE)
+    override val carFontScale: StateFlow<Float> = mutableCarFontScale
+    private val mutableCarCoverScale = MutableStateFlow(DEFAULT_CAR_COVER_SCALE)
+    override val carCoverScale: StateFlow<Float> = mutableCarCoverScale
+    private val mutableCarContentMargin = MutableStateFlow(DEFAULT_CAR_CONTENT_MARGIN)
+    override val carContentMargin: StateFlow<Float> = mutableCarContentMargin
+    private val mutableCarImmersiveMode = MutableStateFlow(DEFAULT_CAR_IMMERSIVE_MODE)
+    override val carImmersiveMode: StateFlow<Boolean> = mutableCarImmersiveMode
     override val navidromeWifiAudioQuality: StateFlow<NavidromeAudioQuality> =
         mutableNavidromeWifiAudioQuality.asStateFlow()
     override val navidromeMobileAudioQuality: StateFlow<NavidromeAudioQuality> =
@@ -2358,8 +2383,40 @@ private class FakeSettingsRepository(
         mutablePlayerArtworkStyle.value = style
     }
 
+    override suspend fun setScanIncremental(enabled: Boolean) {
+        mutableScanIncremental.value = enabled
+    }
+
+    override suspend fun setAutoScanOnStartup(enabled: Boolean) {
+        mutableAutoScanOnStartup.value = enabled
+    }
+
     override suspend fun setAppDisplayScalePreset(preset: AppDisplayScalePreset) {
         mutableAppDisplayScalePreset.value = preset
+    }
+
+    override suspend fun setCarDisplayMode(mode: CarDisplayMode) {
+        mutableCarDisplayMode.value = mode
+    }
+
+    override suspend fun setCarUiScale(scale: Float) {
+        mutableCarUiScale.value = scale
+    }
+
+    override suspend fun setCarFontScale(scale: Float) {
+        mutableCarFontScale.value = scale
+    }
+
+    override suspend fun setCarCoverScale(scale: Float) {
+        mutableCarCoverScale.value = scale
+    }
+
+    override suspend fun setCarContentMargin(margin: Float) {
+        mutableCarContentMargin.value = margin
+    }
+
+    override suspend fun setCarImmersiveMode(enabled: Boolean) {
+        mutableCarImmersiveMode.value = enabled
     }
 
     override suspend fun setNavidromeWifiAudioQuality(quality: NavidromeAudioQuality) {

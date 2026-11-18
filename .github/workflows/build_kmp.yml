@@ -1,15 +1,16 @@
-name: Multi-OS Desktop & Android Build
+name: LynMusic Car Android Build
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-android-release-unsigned:
+  build-car-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,145 +32,39 @@ jobs:
           org.gradle.workers.max=2
           EOF
 
-      - name: Clean & Build Android Release APK (unsigned)
-        run: ./gradlew clean :androidApp:assembleRelease
-
-      - name: Upload Android Release APK (unsigned)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Android-APK-Release-Unsigned
-          path: androidApp/build/outputs/apk/release/**/*.apk
-          if-no-files-found: error
-
-  build-automotive-release-unsigned:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'zulu'
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Configure Gradle memory for CI
+      - name: Decode signing keystore
         shell: bash
+        env:
+          ANDROID_SIGNING_STORE_FILE_B64: ${{ secrets.ANDROID_SIGNING_STORE_FILE_B64 }}
+        if: ${{ env.ANDROID_SIGNING_STORE_FILE_B64 != '' }}
         run: |
-          mkdir -p "$HOME/.gradle"
-          cat > "$HOME/.gradle/gradle.properties" <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8
-          kotlin.daemon.jvmargs=-Xmx1536M
-          org.gradle.workers.max=2
-          EOF
+          echo "$ANDROID_SIGNING_STORE_FILE_B64" | base64 -d > "$GITHUB_WORKSPACE/lyn-release.keystore"
 
-      - name: Clean & Build Automotive Release APK (unsigned)
+      # When no signing secrets are configured, all four variables stay blank and
+      # configureLynReleaseSigning() keeps the release build unsigned (partial config errors out).
+      - name: Clean & Build Car Release APKs (per-ABI + universal)
+        env:
+          ANDROID_SIGNING_STORE_FILE: ${{ github.workspace }}/lyn-release.keystore
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
         run: ./gradlew clean :automotiveApp:assembleRelease
 
-      - name: Upload Automotive Release APK (unsigned)
+      - name: Upload Car Release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Automotive-APK-Release-Unsigned
+          name: LynMusic-Car-APK-Release
           path: automotiveApp/build/outputs/apk/release/**/*.apk
-          if-no-files-found: error
-
-  build-tv-release-unsigned:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'zulu'
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Configure Gradle memory for CI
-        shell: bash
-        run: |
-          mkdir -p "$HOME/.gradle"
-          cat > "$HOME/.gradle/gradle.properties" <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8
-          kotlin.daemon.jvmargs=-Xmx1536M
-          org.gradle.workers.max=2
-          EOF
-
-      - name: Clean & Build TV Release APK (unsigned)
-        run: ./gradlew clean :tvApp:assembleRelease
-
-      - name: Upload TV Release APK (unsigned)
-        uses: actions/upload-artifact@v4
-        with:
-          name: TV-APK-Release-Unsigned
-          path: tvApp/build/outputs/apk/release/**/*.apk
-          if-no-files-found: error
-
-  build-desktop:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact: Linux
-          - os: windows-latest
-            artifact: Windows
-          - os: macos-15
-            artifact: macOS-arm64
-            arch: arm64
-          - os: macos-15-intel
-            artifact: macOS-x64
-            arch: x64
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'zulu'
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Clean & Build Desktop App (Windows)
-        if: runner.os == 'Windows'
-        run: .\gradlew.bat clean :composeApp:packageDistributionForCurrentOS
-
-      - name: Clean & Build Desktop App (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: ./gradlew clean :composeApp:packageDistributionForCurrentOS
-
-      - name: Rename macOS artifacts with architecture
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          find composeApp/build/compose/binaries -type f \( -name "*.dmg" -o -name "*.pkg" \) | while read -r file; do
-            dir="$(dirname "$file")"
-            base="$(basename "$file")"
-            ext="${base##*.}"
-            name="${base%.*}"
-            mv "$file" "$dir/${name}-${{ matrix.arch }}.${ext}"
-          done
-
-      - name: Upload Desktop Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Desktop-App-${{ matrix.artifact }}
-          path: composeApp/build/compose/binaries/**
           if-no-files-found: error
 
   release:
     name: Create Release
     needs:
-      - build-android-release-unsigned
-      - build-automotive-release-unsigned
-      - build-tv-release-unsigned
-      - build-desktop
+      - build-car-release
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -200,17 +95,29 @@ jobs:
       - name: Create release notes
         shell: bash
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           cat > RELEASE_NOTES.md << EOF
-          Automated release for tag ${GITHUB_REF_NAME}
-
-          Included artifacts:
-          - Android Release APK (unsigned)
-          - Automotive Release APK (unsigned)
-          - TV Release APK (unsigned)
-          - Desktop packages for matrix builds
-
-          Please review the assets before publishing if this is a draft release.
+          LynMusic_Car ${GITHUB_REF_NAME}
           EOF
+
+          if [ -f CHANGELOG.md ]; then
+            # 提取 CHANGELOG.md 中匹配版本的章节(## x.y.z 直到下一个 ## 或文件尾)
+            awk -v ver="$VERSION" '
+              $0 ~ "^## "ver"($|[[:space:]])" {found=1; next}
+              found && /^## / {exit}
+              found {print}
+            ' CHANGELOG.md > RELEASE_NOTES.md
+          fi
+
+          if [ ! -s RELEASE_NOTES.md ]; then
+            {
+              echo "LynMusic_Car ${GITHUB_REF_NAME}"
+              echo ""
+              echo "本版本未在 CHANGELOG.md 中找到对应小节,以下是自上个 tag 以来的提交:"
+              echo ""
+              git log --oneline "$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || echo "")"..HEAD 2>/dev/null || true
+            } > RELEASE_NOTES.md
+          fi
 
       - name: Create release
         shell: bash
@@ -219,16 +126,7 @@ jobs:
         run: |
           mapfile -d '' FILES < <(find release-assets -type f \
             \( -name "*.apk" \
-            -o -name "*.aab" \
-            -o -name "*.exe" \
-            -o -name "*.msi" \
-            -o -name "*.dmg" \
-            -o -name "*.pkg" \
-            -o -name "*.deb" \
-            -o -name "*.rpm" \
-            -o -name "*.AppImage" \
-            -o -name "*.zip" \
-            -o -name "*.tar.gz" \) \
+            -o -name "*.aab" \) \
             -print0)
 
           if [ ${#FILES[@]} -eq 0 ]; then

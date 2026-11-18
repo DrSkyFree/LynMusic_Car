@@ -2,7 +2,7 @@
 robolectric = "4.16.1"
 agp = "9.4.1"
 android-compileSdk = "37"
-android-minSdk = "23"
+android-minSdk = "24"
 android-ndk = "28.2.13676358"
 android-targetSdk = "36"
 androidx-activity = "1.13.0"

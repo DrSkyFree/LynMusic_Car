@@ -42,6 +42,9 @@ import top.iwesley.lyn.music.core.model.AutoOpenPlayerOnStartupPreferencesStore
 import top.iwesley.lyn.music.core.model.AutoPlayOnStartupPreferencesStore
 import top.iwesley.lyn.music.core.model.AppDisplayPreferencesStore
 import top.iwesley.lyn.music.core.model.AppDisplayScalePreset
+import top.iwesley.lyn.music.core.model.CarDisplayMode
+import top.iwesley.lyn.music.core.model.CarDisplayPreferencesStore
+import top.iwesley.lyn.music.core.model.UnsupportedCarDisplayPreferencesStore
 import top.iwesley.lyn.music.core.model.CompactPlayerLyricsPreferencesStore
 import top.iwesley.lyn.music.core.model.DesktopLyricsPreferencesStore
 import top.iwesley.lyn.music.core.model.DesktopVlcPreferencesStore
@@ -59,11 +62,13 @@ import top.iwesley.lyn.music.core.model.ImportSourceIndexMode
 import top.iwesley.lyn.music.core.model.ImportSourceType
 import top.iwesley.lyn.music.core.model.ImportTrackBatchSink
 import top.iwesley.lyn.music.core.model.ImportedTrackCandidate
+import top.iwesley.lyn.music.core.model.LibraryScanPreferencesStore
 import top.iwesley.lyn.music.core.model.LocalFolderPickerMode
 import top.iwesley.lyn.music.core.model.LocalFolderSelection
 import top.iwesley.lyn.music.core.model.EmbySourceDraft
 import top.iwesley.lyn.music.core.model.FnMusicConnectionMode
 import top.iwesley.lyn.music.core.model.FnMusicSourceDraft
+import top.iwesley.lyn.music.core.model.UnsupportedLibraryScanPreferencesStore
 import top.iwesley.lyn.music.domain.FN_MUSIC_NAME
 import top.iwesley.lyn.music.domain.FnMusicSessions
 import top.iwesley.lyn.music.domain.fnMusicAccessCodeCredentialKey
@@ -477,6 +482,16 @@ interface ImportSourceRepository {
     ): Result<ImportScanSummary?> {
         return rescanSource(sourceId)
     }
+
+    /**
+     * Records that the storage behind a local folder source (e.g. a USB volume) went away. Stored tracks are
+     * kept exactly like tracks of temporarily unreadable folders; only the index state explains why they
+     * cannot play right now. Default keeps sources untouched for platforms without removable volumes.
+     */
+    suspend fun markLocalFolderUnavailable(sourceId: String, reason: String): Result<Unit> {
+        return Result.success(Unit)
+    }
+
     suspend fun setSourceEnabled(sourceId: String, enabled: Boolean): Result<Unit>
     suspend fun deleteSource(sourceId: String): Result<Unit>
 }
@@ -596,10 +611,18 @@ interface SettingsRepository {
     val autoOpenPlayerOnStartup: StateFlow<Boolean>
     val minimizeWindowOnClose: StateFlow<Boolean>
     val appDisplayScalePreset: StateFlow<AppDisplayScalePreset>
+    val carDisplayMode: StateFlow<CarDisplayMode>
+    val carUiScale: StateFlow<Float>
+    val carFontScale: StateFlow<Float>
+    val carCoverScale: StateFlow<Float>
+    val carContentMargin: StateFlow<Float>
+    val carImmersiveMode: StateFlow<Boolean>
     val navidromeWifiAudioQuality: StateFlow<NavidromeAudioQuality>
     val navidromeMobileAudioQuality: StateFlow<NavidromeAudioQuality>
     val useAndroidExtensionDecoder: StateFlow<Boolean>
     val playerArtworkStyle: StateFlow<PlayerArtworkStyle>
+    val scanIncremental: StateFlow<Boolean>
+    val autoScanOnStartup: StateFlow<Boolean>
     val selectedTheme: StateFlow<AppThemeId>
     val customThemeTokens: StateFlow<AppThemeTokens>
     val textPalettePreferences: StateFlow<AppThemeTextPalettePreferences>
@@ -616,10 +639,18 @@ interface SettingsRepository {
     suspend fun setAutoOpenPlayerOnStartup(enabled: Boolean)
     suspend fun setMinimizeWindowOnClose(enabled: Boolean)
     suspend fun setAppDisplayScalePreset(preset: AppDisplayScalePreset)
+    suspend fun setCarDisplayMode(mode: CarDisplayMode)
+    suspend fun setCarUiScale(scale: Float)
+    suspend fun setCarFontScale(scale: Float)
+    suspend fun setCarCoverScale(scale: Float)
+    suspend fun setCarContentMargin(margin: Float)
+    suspend fun setCarImmersiveMode(enabled: Boolean)
     suspend fun setNavidromeWifiAudioQuality(quality: NavidromeAudioQuality)
     suspend fun setNavidromeMobileAudioQuality(quality: NavidromeAudioQuality)
     suspend fun setUseAndroidExtensionDecoder(enabled: Boolean)
     suspend fun setPlayerArtworkStyle(style: PlayerArtworkStyle)
+    suspend fun setScanIncremental(enabled: Boolean)
+    suspend fun setAutoScanOnStartup(enabled: Boolean)
     suspend fun setSelectedTheme(themeId: AppThemeId)
     suspend fun setCustomThemeTokens(tokens: AppThemeTokens)
     suspend fun setTextPalette(themeId: AppThemeId, palette: AppThemeTextPalette)
@@ -688,6 +719,8 @@ class RoomImportSourceRepository(
     private val secureCredentialStore: SecureCredentialStore,
     private val offlineDownloadGateway: OfflineDownloadGateway = UnsupportedOfflineDownloadGateway,
     private val addressSelector: RemoteSourceAddressSelector = RemoteSourceAddressSelector(),
+    private val libraryScanPreferencesStore: LibraryScanPreferencesStore =
+        UnsupportedLibraryScanPreferencesStore,
 ) : ImportSourceRepository {
     private val navidromeScanLocks = mutableMapOf<String, Mutex>()
     private val navidromeScanLocksMutex = Mutex()
@@ -1924,6 +1957,25 @@ class RoomImportSourceRepository(
         }
     }
 
+    override suspend fun markLocalFolderUnavailable(sourceId: String, reason: String): Result<Unit> {
+        return runCatching {
+            database.importSourceDao().getById(sourceId)
+                ?.takeIf { it.type == ImportSourceType.LOCAL_FOLDER.name }
+                ?: return@runCatching
+            val previous = database.importIndexStateDao().getBySourceId(sourceId)
+            val trackCount = previous?.trackCount ?: database.trackDao().getBySourceId(sourceId).size
+            database.importIndexStateDao().upsert(
+                ImportIndexStateEntity(
+                    sourceId = sourceId,
+                    trackCount = trackCount,
+                    remoteTrackCount = previous?.remoteTrackCount,
+                    lastScannedAt = previous?.lastScannedAt,
+                    lastError = reason.takeIf { it.isNotBlank() },
+                ),
+            )
+        }
+    }
+
     override suspend fun deleteSource(sourceId: String): Result<Unit> {
         return runCatching {
             val source = database.importSourceDao().getById(sourceId)?.toDomain()
@@ -2367,37 +2419,26 @@ class RoomImportSourceRepository(
             }
             // Folders that couldn't be read this time keep their tracks (and so their favorites and embedded lyrics).
             val keptTracks = tracksInUnreadableFolders(source, report.unreadableFolders, scannedTrackEntities)
-            val keptEmbeddedLyrics = keptTracks.map { it.id }.chunked(SQLITE_IN_CLAUSE_CHUNK_SIZE).flatMap { trackIds ->
-                database.lyricsCacheDao().getByTrackIdsAndSourceId(trackIds, EMBEDDED_LYRICS_SOURCE_ID)
-            }
             val selectedEmbeddedTrackIds = database.lyricsCacheDao()
                 .getSelectedTrackIds(trackIdPrefix(source.id), EMBEDDED_LYRICS_SOURCE_ID).toSet()
-            database.trackDao().deleteBySourceId(source.id)
-            database.lyricsCacheDao().deleteByTrackIdPrefixAndSourceId(
-                trackIdPrefix(source.id),
-                EMBEDDED_LYRICS_SOURCE_ID,
-            )
             val trackEntities = scannedTrackEntities + keptTracks
-
-            if (trackEntities.isNotEmpty()) {
-                database.trackDao().upsertAll(trackEntities)
-            }
-            keptEmbeddedLyrics.forEach { database.lyricsCacheDao().upsert(it) }
-            report.tracks.zip(scannedTrackEntities).forEach { (candidate, entity) ->
-                candidate.embeddedLyrics
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { lyrics ->
-                        database.lyricsCacheDao().upsert(
-                            LyricsCacheEntity(
-                                trackId = entity.id,
-                                sourceId = EMBEDDED_LYRICS_SOURCE_ID,
-                                rawPayload = lyrics,
-                                updatedAt = scannedAt,
-                                selectedForPlayback = entity.id in selectedEmbeddedTrackIds,
-                            ),
-                        )
-                    }
+            if (libraryScanPreferencesStore.scanIncremental.value) {
+                applyIncrementalScanDiff(
+                    sourceId = source.id,
+                    scannedTrackEntities = scannedTrackEntities,
+                    keptTracks = keptTracks,
+                    scannedAt = scannedAt,
+                    selectedEmbeddedTrackIds = selectedEmbeddedTrackIds,
+                )
+            } else {
+                applyFullScanRebuild(
+                    sourceId = source.id,
+                    report = report,
+                    scannedTrackEntities = scannedTrackEntities,
+                    keptTracks = keptTracks,
+                    scannedAt = scannedAt,
+                    selectedEmbeddedTrackIds = selectedEmbeddedTrackIds,
+                )
             }
             if (!isSubsonicCompatibleSourceType(source.type)) {
                 database.favoriteTrackDao().deleteOrphansBySourceId(source.id)
@@ -2421,6 +2462,106 @@ class RoomImportSourceRepository(
                 failures = report.failures,
             )
         }.also { if (reconcileLyricsOffsets) database.reconcileSourceLyricsOffsets(trackIdPrefix(source.id)) }
+    }
+
+    /**
+     * The full rebuild keeps the historical semantics: every row of the source is deleted and written
+     * back from the scan, which also repairs any inconsistency a previous scan left behind.
+     */
+    private suspend fun applyFullScanRebuild(
+        sourceId: String,
+        report: ImportScanReport,
+        scannedTrackEntities: List<TrackEntity>,
+        keptTracks: List<TrackEntity>,
+        scannedAt: Long,
+        selectedEmbeddedTrackIds: Set<String>,
+    ) {
+        val keptEmbeddedLyrics = keptTracks.map { it.id }.chunked(SQLITE_IN_CLAUSE_CHUNK_SIZE).flatMap { trackIds ->
+            database.lyricsCacheDao().getByTrackIdsAndSourceId(trackIds, EMBEDDED_LYRICS_SOURCE_ID)
+        }
+        database.trackDao().deleteBySourceId(sourceId)
+        database.lyricsCacheDao().deleteByTrackIdPrefixAndSourceId(
+            trackIdPrefix(sourceId),
+            EMBEDDED_LYRICS_SOURCE_ID,
+        )
+        val trackEntities = scannedTrackEntities + keptTracks
+
+        if (trackEntities.isNotEmpty()) {
+            database.trackDao().upsertAll(trackEntities)
+        }
+        keptEmbeddedLyrics.forEach { database.lyricsCacheDao().upsert(it) }
+        report.tracks.zip(scannedTrackEntities).forEach { (candidate, entity) ->
+            candidate.embeddedLyrics
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { lyrics ->
+                    database.lyricsCacheDao().upsert(
+                        LyricsCacheEntity(
+                            trackId = entity.id,
+                            sourceId = EMBEDDED_LYRICS_SOURCE_ID,
+                            rawPayload = lyrics,
+                            updatedAt = scannedAt,
+                            selectedForPlayback = entity.id in selectedEmbeddedTrackIds,
+                        ),
+                    )
+                }
+        }
+    }
+
+    /**
+     * Incremental application: unchanged rows are left completely untouched (their primary key, and so
+     * every favorite and playlist reference, survives), changed rows are upserted in place, and rows
+     * whose file disappeared are deleted together with their embedded lyrics. Track identity is the
+     * stable scan key — for local folders [trackIdFor] derives it from the source id and the
+     * lower-cased relative path — so comparing id plus content (sizeBytes and modifiedAt included)
+     * detects exactly the new, changed, and vanished files. Runs inside the caller's write transaction.
+     */
+    private suspend fun applyIncrementalScanDiff(
+        sourceId: String,
+        scannedTrackEntities: List<TrackEntity>,
+        keptTracks: List<TrackEntity>,
+        scannedAt: Long,
+        selectedEmbeddedTrackIds: Set<String>,
+    ) {
+        val existingTracks = database.trackDao().getBySourceId(sourceId)
+        val existingById = existingTracks.associateBy { it.id }
+        val keptTrackIds = keptTracks.mapTo(mutableSetOf()) { it.id }
+        val scannedIds = scannedTrackEntities.mapTo(mutableSetOf()) { it.id }
+        val removedTracks = existingTracks.filter { it.id !in scannedIds && it.id !in keptTrackIds }
+        val changedEntities = scannedTrackEntities.filter { entity ->
+            existingById[entity.id]?.copy(addedAt = entity.addedAt) != entity
+        }
+        val changedIds = changedEntities.mapTo(mutableSetOf()) { it.id }
+
+        if (removedTracks.isNotEmpty()) {
+            removedTracks.map { it.id }.chunked(SQLITE_IN_CLAUSE_CHUNK_SIZE).forEach { chunk ->
+                database.trackDao().deleteByIds(chunk)
+            }
+            removedTracks.forEach { track ->
+                database.lyricsCacheDao().deleteByTrackIdAndSourceId(track.id, EMBEDDED_LYRICS_SOURCE_ID)
+            }
+        }
+        if (changedEntities.isNotEmpty()) {
+            database.trackDao().upsertAll(changedEntities)
+        }
+        // Only touch embedded lyrics of new or changed rows; unchanged rows keep their cached lyrics.
+        report.tracks.zip(scannedTrackEntities).forEach { (candidate, entity) ->
+            if (entity.id !in changedIds) return@forEach
+            val lyrics = candidate.embeddedLyrics?.trim()?.takeIf { it.isNotBlank() }
+            if (lyrics != null) {
+                database.lyricsCacheDao().upsert(
+                    LyricsCacheEntity(
+                        trackId = entity.id,
+                        sourceId = EMBEDDED_LYRICS_SOURCE_ID,
+                        rawPayload = lyrics,
+                        updatedAt = scannedAt,
+                        selectedForPlayback = entity.id in selectedEmbeddedTrackIds,
+                    ),
+                )
+            } else {
+                database.lyricsCacheDao().deleteByTrackIdAndSourceId(entity.id, EMBEDDED_LYRICS_SOURCE_ID)
+            }
+        }
     }
 
     /**
@@ -2752,6 +2893,7 @@ class DefaultSettingsRepository(
     private val themePreferencesStore: ThemePreferencesStore,
     private val desktopVlcPreferencesStore: DesktopVlcPreferencesStore,
     private val appDisplayPreferencesStore: AppDisplayPreferencesStore = UnsupportedAppDisplayPreferencesStore,
+    private val carDisplayPreferencesStore: CarDisplayPreferencesStore = UnsupportedCarDisplayPreferencesStore,
     private val compactPlayerLyricsPreferencesStore: CompactPlayerLyricsPreferencesStore =
         UnsupportedCompactPlayerLyricsPreferencesStore,
     private val desktopLyricsPreferencesStore: DesktopLyricsPreferencesStore =
@@ -2770,6 +2912,8 @@ class DefaultSettingsRepository(
         UnsupportedPlaybackDecoderPreferencesStore,
     private val playerArtworkStylePreferencesStore: PlayerArtworkStylePreferencesStore =
         UnsupportedPlayerArtworkStylePreferencesStore,
+    private val libraryScanPreferencesStore: LibraryScanPreferencesStore =
+        UnsupportedLibraryScanPreferencesStore,
 ) : SettingsRepository {
     override val lyricsSources: Flow<List<LyricsSourceDefinition>> = combine(
         database.lyricsSourceConfigDao().observeAll(),
@@ -2793,6 +2937,18 @@ class DefaultSettingsRepository(
         windowClosePreferencesStore.minimizeWindowOnClose
     override val appDisplayScalePreset: StateFlow<AppDisplayScalePreset> =
         appDisplayPreferencesStore.appDisplayScalePreset
+    override val carDisplayMode: StateFlow<CarDisplayMode> =
+        carDisplayPreferencesStore.carDisplayMode
+    override val carUiScale: StateFlow<Float> =
+        carDisplayPreferencesStore.carUiScale
+    override val carFontScale: StateFlow<Float> =
+        carDisplayPreferencesStore.carFontScale
+    override val carCoverScale: StateFlow<Float> =
+        carDisplayPreferencesStore.carCoverScale
+    override val carContentMargin: StateFlow<Float> =
+        carDisplayPreferencesStore.carContentMargin
+    override val carImmersiveMode: StateFlow<Boolean> =
+        carDisplayPreferencesStore.carImmersiveMode
     override val navidromeWifiAudioQuality: StateFlow<NavidromeAudioQuality> =
         navidromeAudioQualityPreferencesStore.navidromeWifiAudioQuality
     override val navidromeMobileAudioQuality: StateFlow<NavidromeAudioQuality> =
@@ -2801,6 +2957,10 @@ class DefaultSettingsRepository(
         playbackDecoderPreferencesStore.useAndroidExtensionDecoder
     override val playerArtworkStyle: StateFlow<PlayerArtworkStyle> =
         playerArtworkStylePreferencesStore.playerArtworkStyle
+    override val scanIncremental: StateFlow<Boolean> =
+        libraryScanPreferencesStore.scanIncremental
+    override val autoScanOnStartup: StateFlow<Boolean> =
+        libraryScanPreferencesStore.autoScanOnStartup
     override val selectedTheme: StateFlow<AppThemeId> = themePreferencesStore.selectedTheme
     override val customThemeTokens: StateFlow<AppThemeTokens> = themePreferencesStore.customThemeTokens
     override val textPalettePreferences: StateFlow<AppThemeTextPalettePreferences> = themePreferencesStore.textPalettePreferences
@@ -2865,6 +3025,30 @@ class DefaultSettingsRepository(
         appDisplayPreferencesStore.setAppDisplayScalePreset(preset)
     }
 
+    override suspend fun setCarDisplayMode(mode: CarDisplayMode) {
+        carDisplayPreferencesStore.setCarDisplayMode(mode)
+    }
+
+    override suspend fun setCarUiScale(scale: Float) {
+        carDisplayPreferencesStore.setCarUiScale(scale)
+    }
+
+    override suspend fun setCarFontScale(scale: Float) {
+        carDisplayPreferencesStore.setCarFontScale(scale)
+    }
+
+    override suspend fun setCarCoverScale(scale: Float) {
+        carDisplayPreferencesStore.setCarCoverScale(scale)
+    }
+
+    override suspend fun setCarContentMargin(margin: Float) {
+        carDisplayPreferencesStore.setCarContentMargin(margin)
+    }
+
+    override suspend fun setCarImmersiveMode(enabled: Boolean) {
+        carDisplayPreferencesStore.setCarImmersiveMode(enabled)
+    }
+
     override suspend fun setNavidromeWifiAudioQuality(quality: NavidromeAudioQuality) {
         navidromeAudioQualityPreferencesStore.setNavidromeWifiAudioQuality(quality)
     }
@@ -2879,6 +3063,14 @@ class DefaultSettingsRepository(
 
     override suspend fun setPlayerArtworkStyle(style: PlayerArtworkStyle) {
         playerArtworkStylePreferencesStore.setPlayerArtworkStyle(style)
+    }
+
+    override suspend fun setScanIncremental(enabled: Boolean) {
+        libraryScanPreferencesStore.setScanIncremental(enabled)
+    }
+
+    override suspend fun setAutoScanOnStartup(enabled: Boolean) {
+        libraryScanPreferencesStore.setAutoScanOnStartup(enabled)
     }
 
     override suspend fun setSelectedTheme(themeId: AppThemeId) {
