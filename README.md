@@ -39,6 +39,34 @@
 2. 在 `CHANGELOG.md` 顶部新增 `## <版本号>` 小节写更新日志
 3. 打 tag(`v<版本号>`)推送 → Actions 自动构建签名 APK 并创建 Release(附 CHANGELOG 对应小节)
 
+## 申明
+
+1. 本项目**仅供学习与技术研究**，不得用于任何商业用途或非法用途。
+2. 作者对使用本项目产生的任何后果**不承担责任**；因使用本软件导致的设备损坏、数据丢失、法律风险等，均由使用者自行承担。
+3. 本项目基于 [LynMusic](https://github.com/wesley666/LynMusic) 修改而来，第三方依赖与数据的版权归各自作者所有，详见 [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)。
+4. 本项目不提供任何音源内容，仅作为本地音乐播放工具；用户需自行确保所播放内容的合法性。
+
 ## 许可证
 
 GPL-3.0-or-later。第三方组件见 [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)。
+
+## 项目结构
+
+```
+LynMusic_Car/
+├─ automotiveApp/          # 车机 APK 入口模块（打包产物在这里）
+├─ app/runtime/            # 应用运行时装配
+├─ android/runtime/        # Android 平台能力实现
+├─ ui/common/              # 跨端共用 UI 组件与主题
+├─ ui/automotive/          # 车机专用界面（竖/横屏、设置页）
+├─ shared/core/            # 核心逻辑与版本常量
+├─ shared/resources/       # 多语言文案与资源
+├─ shared/data/            # Room 数据库与仓库实现
+├─ shared/features/        # 业务功能（播放、扫描、歌词等）
+├─ player/core/            # 播放器内核封装
+├─ cast/api/               # 外部协议接口（已裁剪为最小集）
+├─ buildSrc/               # 自定义 Gradle 构建逻辑
+├─ tools/                  # Python 辅助校验脚本
+├─ .github/workflows/      # CI：构建、签名、指纹校验、发 Release
+└─ app-version.xcconfig    # 版本号唯一来源
+```

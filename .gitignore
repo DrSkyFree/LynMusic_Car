@@ -26,3 +26,18 @@ design/
 /.claude/
 /Caddyfile
 /*.perfetto-trace
+
+# Python 缓存（tools/ 下脚本运行时自动生成，禁止入库）
+__pycache__/
+*.py[cod]
+
+# 签名密钥文件（永久禁止提交）
+*.jks
+*.keystore
+
+# 环境变量与密钥配置（禁止提交）
+.env
+.env.*
+
+# 日志文件
+*.log
